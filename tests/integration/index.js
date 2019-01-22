@@ -83,6 +83,8 @@ describe('integration tests', () => {
       require('./knexSnakeCase')(session);
       require('./snakeCase')(session);
       require('./knexIdentifierMapping')(session);
+      require('./graph/GraphInsert')(session);
+      require('./relationModify')(session);
 
       if (session.isPostgres()) {
         require('./jsonQueries')(session);

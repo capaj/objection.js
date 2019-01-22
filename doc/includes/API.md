@@ -306,7 +306,7 @@ The query is executed when one of its promise methods [`then()`](#then), [`catch
 #### forClass
 
 ```js
-var builder = QueryBuilder.forClass(modelClass);
+const builder = QueryBuilder.forClass(modelClass);
 ```
 
 Create QueryBuilder for a Model subclass. You rarely need to call this. Query builders are created using the
@@ -323,6 +323,29 @@ modelClass|[`Model`](#model)|A Model class constructor
 Type|Description
 ----|-----------------------------
 [`QueryBuilder`](#querybuilder)|The created query builder
+
+
+
+
+#### parseRelationExpression
+
+```js
+const exprObj = QueryBuilder.parseRelationExpression(expr);
+```
+
+Parses a string relation expression into the [object notation](#relationexpression-object-notation).
+
+##### Arguments
+
+Argument|Type|Description
+--------|----|--------------------
+expr|string|A string relation expression.
+
+##### Return value
+
+Type|Description
+----|-----------------------------
+object|The relation expression in object notation.
 
 
 
@@ -453,6 +476,8 @@ const [person1, person2] = await Person.query().findByIds([1, 2]);
 ```js
 const [person1, person2] = await Person.query().findByIds([[1, '10'], [2, '10']]);
 ```
+
+Finds a list of items. The order of the returned items is not guaranteed to be the same as the order of the inputs.
 
 ##### Arguments
 
@@ -1169,7 +1194,7 @@ const numRelatedRows = await someMovie
 console.log(`${numRelatedRows} rows were related`);
 ```
 
-Relates an existing model to another model.
+Relate (attach) an existing model to another model.
 
 This method doesn't create a new instance but only updates the foreign keys and in
 the case of many-to-many relation, creates a join row to the join table.
@@ -1211,9 +1236,9 @@ const numUnrelatedRows = await person.$relatedQuery('movies')
 console.log('movie 50 is no longer related to person 123 through `movies` relation');
 ```
 
-Removes a connection between two models.
+Remove (detach) a connection between two rows.
 
-Doesn't delete the models. Only removes the connection. For ManyToMany relations this
+Doesn't delete the rows. Only removes the connection. For ManyToMany relations this
 deletes the join row from the join table. For other relation types this sets the
 join columns to null.
 
@@ -3783,6 +3808,8 @@ Type|Description
 
 Shorthand for `eagerAlgorithm(Model.JoinEagerAlgorithm).eager(expr)`.
 
+When this algorithm is used, information schema queries are executed to get table column names. They are done only once for each table during the lifetime of the process and then cached.
+
 
 
 #### naiveEager
@@ -5382,7 +5409,7 @@ See [`RelationMapping`](#relationmapping)
 Property|Type|Description
 --------|----|-----------
 relation|function|The relation type. One of `Model.BelongsToOneRelation`, `Model.HasOneRelation`, `Model.HasManyRelation` and `Model.ManyToManyRelation`.
-modelClass|[`Model`](#model)&#124;string|Constructor of the related model class, an absolute path to a module that exports one or a path relative to [`modelPaths`](#modelpaths) that exports a model class.
+modelClass|[`Model`](#model)&#124;function&#124;string|Defines the related model class. This value can be one of the four following things: 1. Constructor of the related model class. 2. a function that returns such constructor. 3. An absolute path to a module that exports a model class. 4. A path relative to [`modelPaths`](#modelpaths) that exports a model class.
 join|[`RelationJoin`](#relationjoin)|Describes how the models are related to each other. See [`RelationJoin`](#relationjoin).
 modify|function([`QueryBuilder`](#querybuilder))&#124;string&#124;string[]&#124;object|Optional modifier for the relation query. If specified as a function, it will be called each time before fetching the relation. If specified as a string (or an array of strings), modifier with specified name will be applied each time when fetching the relation. If specified as an object, it will be used as an additional query parameter - e. g. passing {name: 'Jenny'} would additionally narrow fetched rows to the ones with the name 'Jenny'.
 filter|function([`QueryBuilder`](#querybuilder))&#124;string&#124;object|Alias for modify.
