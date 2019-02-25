@@ -9,8 +9,7 @@ const _ = require('lodash'),
   ref = objection.ref,
   Model = objection.Model,
   QueryBuilder = objection.QueryBuilder,
-  QueryBuilderBase = objection.QueryBuilderBase,
-  RelationExpression = objection.RelationExpression;
+  QueryBuilderBase = objection.QueryBuilderBase;
 
 describe('QueryBuilder', () => {
   let mockKnexQueryResults = [];
@@ -1324,13 +1323,10 @@ describe('QueryBuilder', () => {
       })
       .filterEager('a', _.noop);
 
-    expect(builder._eagerExpression).to.be.a(RelationExpression);
-    expect(builder._eagerModifiersAtPath).to.have.length(1);
-
+    expect(builder.findOperation('eager')).to.not.equal(null);
     builder.clearEager();
 
-    expect(builder._eagerExpression).to.equal(null);
-    expect(builder._eagerModifiersAtPath).to.have.length(0);
+    expect(builder.findOperation('eager')).to.equal(null);
   });
 
   it('clearReject() should clear remove explicit rejection', () => {
@@ -1559,6 +1555,53 @@ describe('QueryBuilder', () => {
       });
   });
 
+  it('hasSelectionAs', () => {
+    expect(TestModel.query().hasSelectionAs('foo', 'foo')).to.equal(true);
+    expect(TestModel.query().hasSelectionAs('foo', 'bar')).to.equal(false);
+
+    expect(
+      TestModel.query()
+        .select('foo as bar')
+        .hasSelectionAs('foo', 'bar')
+    ).to.equal(true);
+
+    expect(
+      TestModel.query()
+        .select('foo')
+        .hasSelectionAs('foo', 'bar')
+    ).to.equal(false);
+
+    expect(
+      TestModel.query()
+        .select('*')
+        .hasSelectionAs('foo', 'foo')
+    ).to.equal(true);
+
+    expect(
+      TestModel.query()
+        .select('*')
+        .hasSelectionAs('foo', 'bar')
+    ).to.equal(false);
+
+    expect(
+      TestModel.query()
+        .select('foo.*')
+        .hasSelectionAs('foo.anything', 'anything')
+    ).to.equal(true);
+
+    expect(
+      TestModel.query()
+        .select('foo.*')
+        .hasSelectionAs('foo.anything', 'somethingElse')
+    ).to.equal(false);
+
+    expect(
+      TestModel.query()
+        .select('foo.*')
+        .hasSelectionAs('bar.anything', 'anything')
+    ).to.equal(false);
+  });
+
   it('hasSelection', () => {
     expect(TestModel.query().hasSelection('foo')).to.equal(true);
     expect(TestModel.query().hasSelection(ref('foo'))).to.equal(true);
@@ -1571,6 +1614,18 @@ describe('QueryBuilder', () => {
       TestModel.query()
         .select('*')
         .hasSelection('DifferentTable.anything')
+    ).to.equal(true);
+
+    expect(
+      TestModel.query()
+        .select('foo.*')
+        .hasSelection('bar.anything')
+    ).to.equal(false);
+
+    expect(
+      TestModel.query()
+        .select('foo.*')
+        .hasSelection('foo.anything')
     ).to.equal(true);
 
     expect(
@@ -1711,12 +1766,14 @@ describe('QueryBuilder', () => {
       $modify: [],
       $recursive: false,
       $allRecursive: false,
+      $childNames: ['foo', 'bar'],
       foo: {
         $name: 'foo',
         $relation: 'foo',
         $modify: [],
         $recursive: false,
-        $allRecursive: false
+        $allRecursive: false,
+        $childNames: []
       },
       bar: {
         $name: 'bar',
@@ -1724,12 +1781,14 @@ describe('QueryBuilder', () => {
         $modify: [],
         $recursive: false,
         $allRecursive: false,
+        $childNames: ['baz'],
         baz: {
           $name: 'baz',
           $relation: 'baz',
           $modify: [],
           $recursive: false,
-          $allRecursive: false
+          $allRecursive: false,
+          $childNames: []
         }
       }
     });
@@ -2017,12 +2076,14 @@ describe('QueryBuilder', () => {
         $modify: [],
         $recursive: false,
         $allRecursive: false,
+        $childNames: ['a', 'b'],
         a: {
           $name: 'a',
           $relation: 'a',
           $modify: [],
           $recursive: false,
-          $allRecursive: false
+          $allRecursive: false,
+          $childNames: []
         },
         b: {
           $name: 'b',
@@ -2030,12 +2091,14 @@ describe('QueryBuilder', () => {
           $modify: [],
           $recursive: false,
           $allRecursive: false,
+          $childNames: ['c'],
           c: {
             $name: 'c',
             $relation: 'c',
             $modify: ['foo'],
             $recursive: false,
-            $allRecursive: false
+            $allRecursive: false,
+            $childNames: []
           }
         }
       });

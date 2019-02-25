@@ -20,9 +20,7 @@ documented elsewhere in the API docs.
 
 
 
-### Properties
-
-<h4 id="objection-model">Model</h4>
+<h3 id="objection-model">Model</h3>
 
 ```js
 const { Model } = require('objection');
@@ -30,7 +28,7 @@ const { Model } = require('objection');
 
 [The model base class.](#model)
 
-<h4 id="objection-transaction">transaction</h4>
+<h3 id="objection-transaction">transaction</h3>
 
 ```js
 const { transaction } = require('objection');
@@ -38,31 +36,70 @@ const { transaction } = require('objection');
 
 [The transaction function.](#transactions)
 
-<h4 id="objection-ref">ref</h4>
+### ref
 
 ```js
 const { ref } = require('objection');
+
+await Model.query()
+  .select([
+    'id',
+    ref('Model.jsonColumn:details.name').castText().as('name'),
+    ref('Model.jsonColumn:details.age').castInt().as('age')
+  ])
+  .join('OtherModel', ref('Model.jsonColumn:details.name').castText(), '=', ref('OtherModel.name'))
+  .where('age', '>', ref('OtherModel.ageLimit'));
 ```
 
-[The ref helper function.](#ref)
+Factory function that returns a [`ReferenceBuilder`](#referencebuilder) instance, that makes it easier to refer
+to tables, columns, json attributes etc. `ReferenceBuilder` can also be used to type cast and alias the references.
 
-<h4 id="objection-raw">raw</h4>
+See [`FieldExpression`](#fieldexpression) for more information about how to refer to json fields.
+
+### raw
 
 ```js
 const { raw } = require('objection');
+
+const childAgeSums = await Person
+  .query()
+  .select(raw('coalesce(sum(??), 0)', 'age').as('childAgeSum'))
+  .where(raw(`?? || ' ' || ??`, ['firstName', 'lastName']), 'Arnold Schwarzenegger')
+  .orderBy(raw('random()'));
+
+console.log(childAgeSums[0].childAgeSum);
+
+await Person
+  .query()
+  .patch({
+    age: raw('age + ?', 10)
+  })
 ```
 
-[The raw helper function.](#raw)
+Factory function that returns a [`RawBuilder`](#rawbuilder) instance. `RawBuilder` is a
+wrapper for knex raw query that doesn't depend on knex. Instances of `RawBuilder` are
+converted to knex raw instances lazily when the query is executed.
 
-<h4 id="objection-lit">lit</h4>
+### lit
 
 ```js
-const { lit } = require('objection');
+const { lit, ref } = require('objection');
+
+await Model
+  .query()
+  .where(ref('Model.jsonColumn:details'), '=', lit({name: 'Jennifer', age: 29}))
+
+await Model
+  .query()
+  .insert({
+    numbers: lit([1, 2, 3]).asArray().castTo('real[]')
+  })
 ```
 
-[The lit helper function.](#lit)
+Factory function that returns a [`LiteralBuilder`](#literalbuilder) instance. `LiteralBuilder`
+helps build literals of different types.
 
-<h4 id="objection-mixin">mixin</h4>
+<h3 id="objection-mixin">mixin</h3>
 
 ```js
 const { mixin } = require('objection');
@@ -70,7 +107,7 @@ const { mixin } = require('objection');
 
 [The mixin helper](#plugins) for applying plugins. See the examples behind this link.
 
-<h4 id="objection-compose">compose</h4>
+<h3 id="objection-compose">compose</h3>
 
 ```js
 const { compose } = require('objection');
@@ -78,7 +115,7 @@ const { compose } = require('objection');
 
 [The compose helper](#plugins) for applying plugins. See the examples behind this link.
 
-<h4 id="objection-lodash">lodash</h4>
+<h3 id="objection-lodash">lodash</h3>
 
 ```js
 const { lodash } = require('objection');
@@ -86,7 +123,7 @@ const { lodash } = require('objection');
 
 [Lodash utility library](https://lodash.com/) used internally by objection.
 
-<h4 id="objection-promise">Promise</h4>
+<h3 id="objection-promise">Promise</h3>
 
 ```js
 const { Promise } = require('objection');
@@ -94,7 +131,7 @@ const { Promise } = require('objection');
 
 [Bluebird promise library](http://bluebirdjs.com/docs/getting-started.html) used internally by objection.
 
-<h4 id="objection-knexsnakecasemappers">knexSnakeCaseMappers</h4>
+<h3 id="objection-knexsnakecasemappers">knexSnakeCaseMappers</h3>
 
 ```js
 const { knexSnakeCaseMappers } = require('objection');
@@ -158,7 +195,7 @@ Option|Type|Description
 upperCase|boolean|Set to `true` if your columns are UPPER_SNAKE_CASED.
 underscoreBeforeDigits|boolean|Set to `true` if you want underscores before digits. For example `foo1Bar2` --> `foo_1_bar_2`.
 
-<h4 id="objection-knexidentifiermapping">knexIdentifierMapping</h4>
+<h3 id="objection-knexidentifiermapping">knexIdentifierMapping</h3>
 
 ```js
 const { knexIdentifierMapping } = require('objection');
@@ -246,7 +283,7 @@ static mapping between column names and property names. In the examples, you wou
 `MyId`, `MyProp` and `MyAnotherProp` in the database and you would like to map them into `id`, `prop`
 and `anotherProp` in the code.
 
-<h4 id="objection-snakecasemappers">snakeCaseMappers</h4>
+<h3 id="objection-snakecasemappers">snakeCaseMappers</h3>
 
 ```js
 const { Model, snakeCaseMappers } = require('objection');
@@ -294,133 +331,6 @@ a normal promise would.
 
 The query is executed when one of its promise methods [`then()`](#then), [`catch()`](#catch), [`map()`](#map),
 [`bind()`](#bind) or [`return()`](#return) is called.
-
-
-
-
-### Static methods
-
-
-
-
-#### forClass
-
-```js
-const builder = QueryBuilder.forClass(modelClass);
-```
-
-Create QueryBuilder for a Model subclass. You rarely need to call this. Query builders are created using the
-[`Model.query()`](#query) and other query methods.
-
-##### Arguments
-
-Argument|Type|Description
---------|----|--------------------
-modelClass|[`Model`](#model)|A Model class constructor
-
-##### Return value
-
-Type|Description
-----|-----------------------------
-[`QueryBuilder`](#querybuilder)|The created query builder
-
-
-
-
-#### parseRelationExpression
-
-```js
-const exprObj = QueryBuilder.parseRelationExpression(expr);
-```
-
-Parses a string relation expression into the [object notation](#relationexpression-object-notation).
-
-##### Arguments
-
-Argument|Type|Description
---------|----|--------------------
-expr|string|A string relation expression.
-
-##### Return value
-
-Type|Description
-----|-----------------------------
-object|The relation expression in object notation.
-
-
-
-
-### Global query building helpers
-
-
-
-
-#### ref
-
-```js
-const ref = require('objection').ref;
-```
-
-```js
-import { ref } from 'objection';
-
-await Model.query()
-  .select([
-    'id',
-    ref('Model.jsonColumn:details.name').castText().as('name'),
-    ref('Model.jsonColumn:details.age').castInt().as('age')
-  ])
-  .join('OtherModel', ref('Model.jsonColumn:details.name').castText(), '=', ref('OtherModel.name'))
-  .where('age', '>', ref('OtherModel.ageLimit'));
-```
-
-Factory function that returns a [`ReferenceBuilder`](#referencebuilder) instance, that makes it easier to refer
-to tables, columns, json attributes etc. `ReferenceBuilder` can also be used to type cast and alias the references.
-
-See [`FieldExpression`](#fieldexpression) for more information about how to refer to json fields.
-
-
-
-
-#### lit
-
-```js
-import { lit, ref } from 'objection';
-
-await Model
-  .query()
-  .where(ref('Model.jsonColumn:details'), '=', lit({name: 'Jennifer', age: 29}))
-
-await Model
-  .query()
-  .insert({
-    numbers: lit([1, 2, 3]).asArray().castTo('real[]')
-  })
-```
-
-Factory function that returns a [`LiteralBuilder`](#literalbuilder) instance. `LiteralBuilder`
-helps build literals of different types.
-
-
-
-
-#### raw
-
-```js
-const { raw } = require('objection');
-
-const childAgeSums = await Person
-  .query()
-  .select(raw('coalesce(sum(??), 0) as ??', ['age', 'childAgeSum']))
-  .where(raw(`?? || ' ' || ??`, 'firstName', 'lastName'), 'Arnold Schwarzenegger')
-  .orderBy(raw('random()'));
-
-console.log(childAgeSums[0].childAgeSum);
-```
-
-Factory function that returns a [`RawBuilder`](#rawbuilder) instance. `RawBuilder` is a
-wrapper for knex raw query that doesn't depend on knex. Instances of `RawBuilder` are
-converted to knex raw instances lazily when the query is executed.
 
 
 
@@ -4772,7 +4682,7 @@ Type|Description
 #### traverse
 
 ```js
-var builder = queryBuilder.traverse(modelClass, traverser);
+const builder = queryBuilder.traverse(modelClass, traverser);
 ```
 
 ```js
@@ -4913,6 +4823,59 @@ properties|string[]|The properties to omit
 Type|Description
 ----|-----------------------------
 [`QueryBuilder`](#querybuilder)|`this` query builder for chaining
+
+
+
+
+
+### Static methods
+
+
+
+
+#### forClass
+
+```js
+const builder = QueryBuilder.forClass(modelClass);
+```
+
+Create QueryBuilder for a Model subclass. You rarely need to call this. Query builders are created using the
+[`Model.query()`](#query) and other query methods.
+
+##### Arguments
+
+Argument|Type|Description
+--------|----|--------------------
+modelClass|[`Model`](#model)|A Model class constructor
+
+##### Return value
+
+Type|Description
+----|-----------------------------
+[`QueryBuilder`](#querybuilder)|The created query builder
+
+
+
+
+#### parseRelationExpression
+
+```js
+const exprObj = QueryBuilder.parseRelationExpression(expr);
+```
+
+Parses a string relation expression into the [object notation](#relationexpression-object-notation).
+
+##### Arguments
+
+Argument|Type|Description
+--------|----|--------------------
+expr|string|A string relation expression.
+
+##### Return value
+
+Type|Description
+----|-----------------------------
+object|The relation expression in object notation.
 
 
 
@@ -5258,8 +5221,34 @@ You probably don't want to define `modelPaths` property for each model. Once aga
 recommend that you create a `BaseModel` super class for all your models and define
 shared configuration such as this there.
 
+#### concurrency
 
+```js
+class Person extends Model {
+  static get concurrency() {
+    return 10;
+  }
+}
+```
 
+> ESNext:
+
+```js
+class Person extends Model {
+  static concurrency = 10;
+}
+```
+
+How many queries can be run concurrently per connection.
+
+This doesn't limit the concurrencly of the entire server. It only limits the number of
+concurrent queries that can be run on a single connection. By default knex connection
+pool size is 10, which means that the maximum number of concurrent queries started by
+objection is `Model.concurrency * 10`. You can also easily increase the knex pool size.
+
+The default concurrency is 4 except for mssql, for which the default is 1. The
+mssql default is needed because of the buggy driver that only allows one query
+at a time per connection.
 
 #### relationMappings
 
@@ -6542,25 +6531,82 @@ Type|Description
 
 
 
-#### traverse
+<h4 id="traverse-model">traverse</h4>
 
 > There are two ways to call this method:
 
 ```js
+const models = await SomeModel.query();
+
 Model.traverse(models, (model, parentModel, relationName) => {
   doSomething(model);
 });
 ```
 
-and
+> and
 
 ```js
-Model.traverse(Person, models, (person, parentModel, relationName) => {
+const persons = await Person.query()
+
+Model.traverse(Person, persons, (person, parentModel, relationName) => {
   doSomethingForPerson(person);
 });
 ```
 
-Traverses the relation tree of a list of models.
+Traverses the relation tree of a model instance (or a list of model instances).
+
+Calls the callback for each related model recursively. The callback is called
+also for the input models themselves.
+
+In the second example the traverser function is only called for `Person` instances.
+
+This method is not async. If you have an asynchronous traverse, you can use `traverseAsync`.
+
+##### Arguments
+
+Argument|Type|Description
+--------|----|-------------------
+filterConstructor|function|If this optional constructor is given, the `traverser` is only called for models for which `model instanceof filterConstructor` returns true.
+models|[`Model`](#model)&#124;[`Model`](#model)[]|The model(s) whose relation trees to traverse.
+traverser|function([`Model`](#model), string, string)|The traverser function that is called for each model. The first argument is the model itself. If the model is in a relation of some other model the second argument is the parent model and the third argument is the name of the relation.
+
+
+
+
+
+#### traverseAsync
+
+> There are two ways to call this method:
+
+```js
+const models = await SomeModel.query();
+
+await Model.traverseAsync(models, async (model, parentModel, relationName) => {
+  await doSomething(model);
+});
+```
+
+> and
+
+```js
+const persons = await Person.query()
+
+Model.traverseAsync(Person, persons, async (person, parentModel, relationName) => {
+  await doSomethingForPerson(person);
+});
+```
+
+> Also works with a single model instance
+
+```js
+const person = await Person.query();
+
+await Person.traverseAsync(person, async (model, parentModel, relationName) => {
+  await doSomething(model);
+});
+```
+
+Traverses the relation tree of a model instance (or a list of model instances).
 
 Calls the callback for each related model recursively. The callback is called
 also for the input models themselves.
@@ -6574,6 +6620,7 @@ Argument|Type|Description
 filterConstructor|function|If this optional constructor is given, the `traverser` is only called for models for which `model instanceof filterConstructor` returns true.
 models|[`Model`](#model)&#124;[`Model`](#model)[]|The model(s) whose relation trees to traverse.
 traverser|function([`Model`](#model), string, string)|The traverser function that is called for each model. The first argument is the model itself. If the model is in a relation of some other model the second argument is the parent model and the third argument is the name of the relation.
+
 
 
 
@@ -7644,7 +7691,14 @@ Type|Description
 
 #### $traverse
 
-Shortcut for [`Model.traverse(filterConstructor, this, callback)`](#traverse-2212).
+Shortcut for [`Model.traverse(filterConstructor, this, callback)`](#traverse-model).
+
+
+
+
+#### $traverseAsync
+
+Shortcut for [`Model.traverseAsync(filterConstructor, this, callback)`](#traverseasync).
 
 
 
@@ -8873,3 +8927,20 @@ Can be used in conjuction with `castTo`.
 #### as
 
 Gives an alias for the reference `.select(ref('age').as('yougness'))`
+
+
+
+
+## RawBuilder
+
+An instance of this is returned from the [`raw`](#raw) helper function.
+
+### Methods
+
+#### as
+
+Gives an alias for the raw expression `.select(raw('concat(foo, bar)').as('fooBar'))`.
+
+You should use this instead of inserting the alias to the SQL to give objection
+more information about the query. Some edge cases, like using `raw` in `select`
+inside a `joinEager` modifier won't work unless you use this method.

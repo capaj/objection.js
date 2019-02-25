@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.6.2
+
+  * Add `as` method for `raw` making it possible to use `raw` expressions in `joinEager` modifiers (as long as you give names to your raw expressions using `as`).
+
+## 1.6.1
+
+  * Fix some very rare upsertGraph edge cases.
+
+## 1.6.0
+
+  * Add `Model.traverseAsync` and `modelInstance.$traverseAsync` methods.
+
+  * Fixes: [#842](https://github.com/Vincit/objection.js/issues/842) and [#1205](https://github.com/Vincit/objection.js/issues/1205). This bug is about subqueries "inheriting" parent query table name and alias. This bug has been around a long time and there is a small chance that people have started accidentally or on purpose use it as a feature. If you get weird reference errors from subqueries (relation not found, table not found etc.) you may need to explicitly give an alias or use `from` in your subqueries after this update. This is a borderline breaking change, but since 2.0 is still pretty far away, I wanted to get this out faster. If I'm wrong and people are heavily depending on this bug, I'll revert the change.
+
+  * Fixes: [#1215](https://github.com/Vincit/objection.js/issues/1215)
+  * Fixes: [#1206](https://github.com/Vincit/objection.js/issues/1206)
+
+## 1.5.3
+
+### What's new
+
+  * Fixes [#1204](https://github.com/Vincit/objection.js/issues/1204)
+
 ## 1.5.1
 
 ### What's new

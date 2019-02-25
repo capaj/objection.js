@@ -31,14 +31,9 @@ What objection.js **doesn't** give you:
     to you. knex has a great [migration tool](http://knexjs.org/#Migrations) that we recommend for this job. Check
     out the [example project](https://github.com/Vincit/objection.js/tree/master/examples/express-es6).
 
-Objection.js uses Promises and coding practices that make it ready for the future. We use Well known
-[OOP](https://en.wikipedia.org/wiki/Object-oriented_programming) techniques and ES2015 classes and inheritance
-in the codebase. You can use things like [async/await](http://jakearchibald.com/2014/es7-async-functions/)
-using node ">=7.6.0" or alternatively with a transpiler such as [Babel](https://babeljs.io/). Check out our [ES2015](https://github.com/Vincit/objection.js/tree/master/examples/express-es6)
-and [ESNext](https://github.com/Vincit/objection.js/tree/master/examples/express-es7) example projects.
-
 Shortcuts:
  * [API reference](https://vincit.github.io/objection.js/#api-reference)
+ * [Example projects](https://github.com/Vincit/objection.js/tree/master/examples)
  * [Changelog](https://vincit.github.io/objection.js/#changelog)
  * [Contribution guide](https://vincit.github.io/objection.js/#contribution-guide)
  * [Plugins](https://vincit.github.io/objection.js/#plugins)
