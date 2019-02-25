@@ -1,6 +1,6 @@
 {
   "name": "@capaj/objection",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "An SQL-friendly ORM for Node.js",
   "main": "lib/objection.js",
   "license": "MIT",
@@ -67,7 +67,7 @@
     "knex": "0.x"
   },
   "devDependencies": {
-    "@types/knex": "^0.15.1",
+    "@types/knex": "^0.15.2",
     "@types/node": "^10.12.18",
     "babel-eslint": "^10.0.1",
     "chai": "^4.2.0",
