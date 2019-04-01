@@ -33,7 +33,7 @@ describe('integration tests', () => {
       },
       pool: {
         min: 2,
-        max: 50,
+        max: 10,
         afterCreate: (conn, cb) => {
           conn.query(`SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'`, err => {
             cb(err, conn);
@@ -85,6 +85,8 @@ describe('integration tests', () => {
       require('./knexIdentifierMapping')(session);
       require('./graph/GraphInsert')(session);
       require('./relationModify')(session);
+      require('./nonPrimaryKeyRelations')(session);
+      require('./staticHooks')(session);
 
       if (session.isPostgres()) {
         require('./jsonQueries')(session);

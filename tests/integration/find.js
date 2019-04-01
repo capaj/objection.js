@@ -389,7 +389,7 @@ module.exports = session => {
                 Model2.query()
                   .select('id_col')
                   .where('model2_prop2', 20)
-                  .build()
+                  .toKnexQuery()
               )
             )
             .then(models => {
@@ -420,7 +420,7 @@ module.exports = session => {
                 Model2.query()
                   .select('id_col')
                   .where('model2_prop2', 20)
-                  .build()
+                  .toKnexQuery()
               ])
             )
             .then(models => {
@@ -1016,7 +1016,7 @@ module.exports = session => {
           it('timeout should throw a TimeOutError', done => {
             const knexQuery = Model1.query()
               .timeout(50)
-              .build();
+              .toKnexQuery();
 
             // Now the tricky part. We add `pg_sleep` as another source table so that the query
             // takes a long time.
@@ -1074,6 +1074,12 @@ module.exports = session => {
               .andWhereNotBetween('model2.id_col', [0, 1])
               .orWhereBetween('model2.id_col', [0, 1])
               .orWhereNotBetween('model2.id_col', [0, 1])
+              .whereColumn('model2.id_col', 'model2.id_col')
+              .andWhereColumn('model2.id_col', 'model2.id_col')
+              .orWhereColumn('model2.id_col', 'model2.id_col')
+              .whereNotColumn('model2.id_col', 'model2.id_col')
+              .andWhereNotColumn('model2.id_col', 'model2.id_col')
+              .orWhereNotColumn('model2.id_col', 'model2.id_col')
               .orderByRaw('model2.id_col')
               .into('model2')
               .table('model2')
@@ -1106,6 +1112,9 @@ module.exports = session => {
                   .andOnNotIn('m2.model2_prop2', [1, 2])
                   .andOnNull('m2.model2_prop2')
                   .andOnNotNull('m2.model2_prop2')
+                  .onVal('m2.model2_prop2', 1)
+                  .andOnVal('m2.model2_prop2', 2)
+                  .orOnVal('m2.model2_prop2', 3)
               )
               .rightJoin('model2 as m3', 'm3.model2_prop2', 'm1.model2_prop2')
               .rightOuterJoin('model2 as m4', 'm4.model2_prop2', 'm1.model2_prop2')

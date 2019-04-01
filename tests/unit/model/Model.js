@@ -1358,6 +1358,98 @@ describe('Model', () => {
       });
     });
 
+    it('should pick a set of virtuals if array is passed to in `virtuals` option', () => {
+      class Model1 extends Model {
+        get foo() {
+          return this.a + this.b;
+        }
+
+        get bar() {
+          return this.a * this.b;
+        }
+
+        static get virtualAttributes() {
+          return ['foo'];
+        }
+      }
+
+      expect(
+        Model1.fromJson({
+          a: 100,
+          b: 10,
+          rel1: Model1.fromJson({ a: 101, b: 11 }),
+          rel2: [Model1.fromJson({ a: 102, b: 12 }), Model1.fromJson({ a: 103, b: 13 })]
+        }).$toJson({ virtuals: ['foo', 'bar'] })
+      ).to.eql({
+        a: 100,
+        b: 10,
+        foo: 110,
+        bar: 1000,
+
+        rel1: {
+          a: 101,
+          b: 11,
+          foo: 112,
+          bar: 1111
+        },
+
+        rel2: [{ a: 102, b: 12, foo: 114, bar: 1224 }, { a: 103, b: 13, foo: 116, bar: 1339 }]
+      });
+    });
+
+    it('should include virtualAttributes for related models', () => {
+      class Model1 extends modelClass('Model1') {
+        static get virtualAttributes() {
+          return ['foo'];
+        }
+
+        get foo() {
+          return 'foo';
+        }
+      }
+
+      class Model2 extends modelClass('Model2') {
+        static get virtualAttributes() {
+          return ['bar'];
+        }
+
+        static get relationMappings() {
+          return {
+            model1: {
+              relation: Model.BelongsToOneRelation,
+              modelClass: Model1,
+              join: {
+                from: 'Model2.model1Id',
+                to: 'Model1.id'
+              }
+            }
+          };
+        }
+
+        get bar() {
+          return 'bar';
+        }
+      }
+
+      let model2 = Model2.fromJson({
+        a: 'a',
+        model1: {
+          b: 'b',
+          c: 'c'
+        }
+      });
+
+      expect(model2.toJSON()).to.eql({
+        a: 'a',
+        bar: 'bar',
+        model1: {
+          b: 'b',
+          c: 'c',
+          foo: 'foo'
+        }
+      });
+    });
+
     it('should include methods', () => {
       class Model1 extends Model {
         foo() {
@@ -1431,6 +1523,77 @@ describe('Model', () => {
         b: 100,
         c: 1000
       });
+    });
+  });
+
+  describe('cloneObjectAttributes', () => {
+    it('should clone object attributes by default when calling $toJson or $toDatabaseJson', () => {
+      class Person extends Model {}
+
+      const obj = {
+        foo: {
+          bar: 1
+        }
+      };
+
+      const person = Person.fromDatabaseJson({
+        objectField: obj
+      });
+
+      expect(person.objectField).to.equal(obj);
+
+      let json = person.$toDatabaseJson();
+
+      expect(person.objectField).to.equal(obj);
+      expect(json.objectField).to.eql(obj);
+      expect(json.objectField).to.not.equal(obj);
+
+      json = person.$toJson();
+
+      expect(person.objectField).to.equal(obj);
+      expect(json.objectField).to.eql(obj);
+      expect(json.objectField).to.not.equal(obj);
+
+      json = person.toJSON();
+
+      expect(person.objectField).to.equal(obj);
+      expect(json.objectField).to.eql(obj);
+      expect(json.objectField).to.not.equal(obj);
+    });
+
+    it('should NOT clone object attributes when calling $toJson or $toDatabaseJson if Model.cloneObjectAttributes = false', () => {
+      class Person extends Model {
+        static get cloneObjectAttributes() {
+          return false;
+        }
+      }
+
+      const obj = {
+        foo: {
+          bar: 1
+        }
+      };
+
+      const person = Person.fromDatabaseJson({
+        objectField: obj
+      });
+
+      expect(person.objectField).to.equal(obj);
+
+      let json = person.$toDatabaseJson();
+
+      expect(person.objectField).to.equal(obj);
+      expect(json.objectField).to.equal(obj);
+
+      json = person.$toJson();
+
+      expect(person.objectField).to.equal(obj);
+      expect(json.objectField).to.equal(obj);
+
+      json = person.toJSON();
+
+      expect(person.objectField).to.equal(obj);
+      expect(json.objectField).to.equal(obj);
     });
   });
 

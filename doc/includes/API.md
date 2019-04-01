@@ -121,6 +121,8 @@ const { compose } = require('objection');
 const { lodash } = require('objection');
 ```
 
+**DEPRECATED! Will be removed in 2.0**
+
 [Lodash utility library](https://lodash.com/) used internally by objection.
 
 <h3 id="objection-promise">Promise</h3>
@@ -128,6 +130,8 @@ const { lodash } = require('objection');
 ```js
 const { Promise } = require('objection');
 ```
+
+**DEPRECATED! Will be removed in 2.0**
 
 [Bluebird promise library](http://bluebirdjs.com/docs/getting-started.html) used internally by objection.
 
@@ -5454,6 +5458,41 @@ If this property is left unset all properties declared as objects or arrays in t
 
 
 
+#### cloneObjectAttributes
+
+```js
+class Person extends Model {
+  static get cloneObjectAttributes() {
+    return false;
+  }
+}
+```
+
+> ESNext:
+
+```js
+class Person extends Model {
+  static cloneObjectAttributes = false;
+}
+```
+
+If true (the default) object attributes (for example jsonb columns) are cloned when
+`$toDatabaseJson`, `$toJson` or `toJSON` is called. If this is set to false, they are
+not cloned. Note that nested `Model` instances inside relations etc. are still effectively
+cloned, because `$toJson` is called for them recursively, but their jsonb columns, again,
+are not :)
+
+Usually you don't need to care about this setting, but if you have large object fields
+(for example large objects in jsonb columns) cloning the data can become slow and play
+a significant part in your server's performance. There's rarely a need to to clone this
+data, but since it has historically been copied, we cannot change the default behaviour
+easily.
+
+TLDR; Set this setting to `false` if you have large jsonb columns and you see that
+cloning that data takes a significant amount of time **when you profile the code**.
+
+
+
 
 #### columnNameMappers
 
@@ -6904,6 +6943,10 @@ const jsonObj = modelInstance.$toJson(opt);
 const shallowObj = modelInstance.$toJson({shallow: true, virtuals: true});
 ```
 
+```js
+const onlySomeVirtuals = modelInstance.toJSON({virtuals: ['fullName']});
+```
+
 Exports this model as a JSON object.
 
 ##### Arguments
@@ -6929,6 +6972,10 @@ const jsonObj = modelInstance.toJSON(opt);
 
 ```js
 const shallowObj = modelInstance.toJSON({shallow: true, virtuals: true});
+```
+
+```js
+const onlySomeVirtuals = modelInstance.toJSON({virtuals: ['fullName']});
 ```
 
 Exports this model as a JSON object.
@@ -8609,7 +8656,7 @@ shallow|boolean|If true, relations are ignored
 Property|Type|Description
 --------|----|-----------
 shallow|boolean|If true, relations are ignored. Default is false.
-virtuals|boolean|If false, virtual attributes are omitted from the output. Default is true.
+virtuals|boolean&#124;string[]|If false, virtual attributes are omitted from the output. Default is true. You can also pass an array of property names and only those virtual properties get picked. You can even pass in property/function names that are not included in the static `virtualAttributes` array.
 
 
 

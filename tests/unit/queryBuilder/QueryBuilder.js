@@ -938,7 +938,13 @@ describe('QueryBuilder', () => {
       'whereNotBetween',
       'andWhereNotBetween',
       'orWhereBetween',
-      'orWhereNotBetween'
+      'orWhereNotBetween',
+      'whereColumn',
+      'andWhereColumn',
+      'orWhereColumn',
+      'whereNotColumn',
+      'andWhereNotColumn',
+      'orWhereNotColumn'
     ];
 
     for (let i = 0; i < wheres.length; i++) {
@@ -1384,7 +1390,7 @@ describe('QueryBuilder', () => {
     expect(() => {
       QueryBuilder.forClass(TestModel)
         .where('id', undefined)
-        .build();
+        .toKnexQuery();
     }).to.throwException(err => {
       expect(err.message).to.equal(
         "undefined passed as argument #1 for 'where' operation. Call skipUndefined() method to ignore the undefined values."
@@ -1394,7 +1400,7 @@ describe('QueryBuilder', () => {
     expect(() => {
       QueryBuilder.forClass(TestModel)
         .orWhere('id', '<', undefined)
-        .build();
+        .toKnexQuery();
     }).to.throwException(err => {
       expect(err.message).to.equal(
         "undefined passed as argument #2 for 'orWhere' operation. Call skipUndefined() method to ignore the undefined values."
@@ -1404,21 +1410,21 @@ describe('QueryBuilder', () => {
     expect(() => {
       QueryBuilder.forClass(TestModel)
         .orWhere('id', undefined, 10)
-        .build();
+        .toKnexQuery();
     }).to.throwException();
 
     expect(() => {
       QueryBuilder.forClass(TestModel)
         .delete()
         .whereIn('id', undefined)
-        .build();
+        .toKnexQuery();
     }).to.throwException();
 
     expect(() => {
       QueryBuilder.forClass(TestModel)
         .delete()
         .whereIn('id', [1, undefined, 3])
-        .build();
+        .toKnexQuery();
     }).to.throwException(err => {
       expect(err.message).to.equal(
         "undefined passed as an item in argument #1 for 'whereIn' operation. Call skipUndefined() method to ignore the undefined values."
@@ -1431,28 +1437,28 @@ describe('QueryBuilder', () => {
       QueryBuilder.forClass(TestModel)
         .skipUndefined()
         .where('id', undefined)
-        .build();
+        .toKnexQuery();
     }).to.not.throwException();
 
     expect(() => {
       QueryBuilder.forClass(TestModel)
         .skipUndefined()
         .orWhere('id', '<', undefined)
-        .build();
+        .toKnexQuery();
     }).to.not.throwException();
 
     expect(() => {
       QueryBuilder.forClass(TestModel)
         .skipUndefined()
         .orWhere('id', undefined, 10)
-        .build();
+        .toKnexQuery();
     }).to.not.throwException();
 
     expect(() => {
       QueryBuilder.forClass(TestModel)
         .skipUndefined()
         .deleteById(undefined)
-        .build();
+        .toKnexQuery();
     }).to.not.throwException();
 
     expect(() => {
@@ -1460,7 +1466,7 @@ describe('QueryBuilder', () => {
         .skipUndefined()
         .delete()
         .whereIn('id', undefined)
-        .build();
+        .toKnexQuery();
     }).to.not.throwException();
 
     expect(() => {
@@ -1468,7 +1474,7 @@ describe('QueryBuilder', () => {
         .skipUndefined()
         .delete()
         .whereIn('id', [1, undefined, 3])
-        .build();
+        .toKnexQuery();
     }).to.not.throwException();
   });
 
