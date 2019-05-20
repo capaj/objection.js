@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.9
+
+  * Revert fix for [#1089](https://github.com/Vincit/objection.js/issues/1089). It was causing more bugs than it fixed. #1089 will be addressed in 2.0.
+  * Typings updates
+
+## 1.6.8
+
+  * Fix [#1287](https://github.com/Vincit/objection.js/issues/1287)
+
+## 1.6.7
+
+  * A bunch of regression bug fixes.
+
 ## 1.6.3
 
   * Fixes: [#1227](https://github.com/Vincit/objection.js/issues/1227)

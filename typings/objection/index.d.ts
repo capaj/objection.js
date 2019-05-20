@@ -110,6 +110,7 @@ declare namespace Objection {
   export interface ModelOptions {
     patch?: boolean;
     skipValidation?: boolean;
+    old?: object;
   }
 
   export interface ValidatorContext {
@@ -314,6 +315,10 @@ declare namespace Objection {
     (relationExpression: RelationExpression): QueryBuilder<QM, RM, RV>;
   }
 
+  export interface Modifiers {
+    [name: string]: (builder: QueryBuilder<any>) => void;
+  }
+
   interface TraverserFunction {
     /**
      * Called if model is in a relation of some other model.
@@ -368,6 +373,10 @@ declare namespace Objection {
       relationExpression: RelationExpression,
       modifier: (builder: QueryBuilder<QM2, QM2[]>) => void
     ): QueryBuilder<QM1, RM1, RV1>;
+    <QM2 extends Model>(
+      relationExpression: RelationExpression,
+      modifier: string | string[]
+    ): QueryBuilder<QM1, RM1, RV1>;
   }
 
   interface BluebirdMapper<T, Result> {
@@ -418,6 +427,7 @@ declare namespace Objection {
     columnNameMappers: ColumnNameMappers;
     relatedFindQueryMutates: boolean;
     relatedInsertQueryMutates: boolean;
+    modifiers: Modifiers;
 
     raw: knex.RawBuilder;
     fn: knex.FunctionHelper;
@@ -491,6 +501,7 @@ declare namespace Objection {
     static columnNameMappers: ColumnNameMappers;
     static relatedFindQueryMutates: boolean;
     static relatedInsertQueryMutates: boolean;
+    static modifiers: Modifiers;
 
     static raw: knex.RawBuilder;
     static fn: knex.FunctionHelper;
@@ -791,7 +802,7 @@ declare namespace Objection {
       operator: string,
       value: Value[] | QueryBuilder<any, any[]>
     ): this;
-    whereInComposite(column: ColumnRef, values: Value[] | QueryBuilder<any, any[]>): this;
+    whereInComposite(column: ColumnRef | ColumnRef[], values: Value[] | QueryBuilder<any, any[]>): this;
 
     whereJsonSupersetOf: WhereJson<QM, RM, RV>;
     orWhereJsonSupersetOf: WhereJson<QM, RM, RV>;
@@ -876,7 +887,7 @@ declare namespace Objection {
 
     skipUndefined(): this;
 
-    transacting(transation: Transaction): this;
+    transacting(transaction: Transaction): this;
 
     clone(): this;
 
@@ -900,6 +911,7 @@ declare namespace Objection {
     first(): QueryBuilderYieldingOneOrNone<QM>;
 
     alias(alias: string): this;
+    aliasFor(modelClassOrTableName: string | ModelClass<any>, alias:string): this;
     tableRefFor(modelClass: ModelClass<any>): string;
     tableNameFor(modelClass: ModelClass<any>): string;
 
@@ -1087,9 +1099,9 @@ declare namespace Objection {
     orderByRaw: RawMethod<QM, RM, RV>;
 
     // Union
-    union: Union<QM>;
-    unionAll(callback: () => void): this;
-    intersect(callback: () => void): this;
+    union: SetOperations<QM>;
+    unionAll: SetOperations<QM>;
+    intersect: SetOperations<QM>;
 
     // Having
     having: Where<QM, RM, RV>;
@@ -1116,6 +1128,7 @@ declare namespace Objection {
 
     // Clear
     clearSelect(): this;
+    clearOrder(): this;
     clearWhere(): this;
 
     // Paging
@@ -1258,12 +1271,12 @@ declare namespace Objection {
   }
 
   interface WhereIn<QM extends Model, RM, RV> {
-    (column: ColumnRef, values: Value[]): QueryBuilder<QM, RM, RV>;
+    (column: ColumnRef | ColumnRef[], values: Value[]): QueryBuilder<QM, RM, RV>;
     (
-      column: ColumnRef,
+      column: ColumnRef | ColumnRef[],
       callback: (this: QueryBuilder<QM, QM[]>, queryBuilder: QueryBuilder<QM, QM[]>) => void
     ): QueryBuilder<QM, RM, RV>;
-    (column: ColumnRef, query: QueryBuilder<any, any[]>): QueryBuilder<QM, RM, RV>;
+    (column: ColumnRef | ColumnRef[], query: QueryBuilder<any, any[]>): QueryBuilder<QM, RM, RV>;
   }
 
   interface WhereBetween<QM extends Model, RM, RV> {
@@ -1286,7 +1299,7 @@ declare namespace Objection {
     (column: ColumnRef, direction?: string): QueryBuilder<QM, RM, RV>;
   }
 
-  interface Union<QM extends Model> {
+  interface SetOperations<QM extends Model> {
     (
       callback: (this: QueryBuilder<QM, QM[]>, queryBuilder: QueryBuilder<QM, QM[]>) => void,
       wrap?: boolean
