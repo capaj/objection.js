@@ -1483,7 +1483,7 @@ declare namespace Objection {
      * [string, number, object, array, boolean, null]
      * or an array of the acceptable types
      */
-    type?: string | string[];
+    type?: string | string[] | {format: string};
 
     /////////////////////////////////////////////////
     // Combining Schemas
