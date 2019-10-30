@@ -1,6 +1,6 @@
 {
   "name": "@capaj/objection",
-  "version": "1.6.13",
+  "version": "1.6.14",
   "description": "An SQL-friendly ORM for Node.js",
   "main": "lib/objection.js",
   "license": "MIT",
@@ -88,7 +88,7 @@
     "pg": "^7.11.0",
     "prettier": "1.18.2",
     "sqlite3": "^4.0.8",
-    "typescript": "^3.4.5",
+    "typescript": "^3.6.4",
     "vuepress": "1.0.4"
   },
   "nyc": {
