@@ -632,7 +632,7 @@ const people = await Person
 
 Arbitrary relation graphs can be inserted using the [insertGraph](/api/query-builder/mutate-methods.html#insertgraph) method. This is best explained using examples, so check them out.
 
-See the [allowInsert](/api/query-builder/mutate-methods.html#allowinsert) method if you need to limit which relations can be inserted using [insertGraph](/api/query-builder/mutate-methods.html#insertgraph) method to avoid security issues. [allowInsert](/api/query-builder/mutate-methods.html#allowinsert) works like [allowEager](/api/query-builder/mutate-methods.html#allowinsert).
+See the [allowInsert](/api/query-builder/mutate-methods.html#allowinsert) method if you need to limit which relations can be inserted using [insertGraph](/api/query-builder/mutate-methods.html#insertgraph) method to avoid security issues. [allowInsert](/api/query-builder/mutate-methods.html#allowinsert) works like [allowEager](/api/query-builder/eager-methods.html#alloweager).
 
 If you are using Postgres the inserts are done in batches for maximum performance. On other databases the rows need to be inserted one at a time. This is because postgresql is the only database engine that returns the identifiers of all inserted rows and not just the first or the last one.
 
@@ -710,7 +710,7 @@ await Person
   }]);
 ```
 
-The query above will insert a pet named `I am the dog of Jennifer whose id is 523` for Jennifer. If `#ref{}` is used within a string, the references are replaced with the referred values inside the string. If the reference string contains nothing but the reference, the referred value is copied to it's place preserving its type.
+The query above will insert a pet named `I am the dog of Jennifer whose id is 523` for Jennifer. If `#ref{}` is used within a string, the references are replaced with the referred values inside the string. If the reference string contains nothing but the reference, the referred value is copied to its place preserving its type.
 
 Existing rows can be related to newly inserted rows by using the `relate` option. `relate` can be `true` in which case all models in the graph that have an identifier get related. `relate` can also be an array of relation paths like `['children', 'children.movies.actors']` in which case only objects in those paths get related even if they have an idetifier.
 
