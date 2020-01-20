@@ -4,7 +4,7 @@ const expect = require('expect.js');
 const Promise = require('bluebird');
 
 const { TimeoutError } = require('bluebird');
-const { raw, ref, lit, Model, QueryBuilderOperation } = require('../..');
+const { raw, ref, lit, val, fn, Model, QueryBuilderOperation } = require('../..');
 
 module.exports = session => {
   let Model1 = session.models.Model1;
@@ -122,13 +122,13 @@ module.exports = session => {
               expect(models[0]).to.be.a(Model2);
               // Test that only the selected columns (and stuff set by the $afterGet hook)  were returned.
               expect(_.uniq(_.flattenDeep(_.map(models, _.keys))).sort()).to.eql([
-                '$afterGetCalled',
+                '$afterFindCalled',
                 'idCol',
                 'model2Prop2'
               ]);
               expect(_.map(models, 'idCol').sort()).to.eql([1, 2, 3]);
               expect(_.map(models, 'model2Prop2').sort()).to.eql([10, 20, 30]);
-              expect(_.map(models, '$afterGetCalled').sort()).to.eql([1, 1, 1]);
+              expect(_.map(models, '$afterFindCalled').sort()).to.eql([1, 1, 1]);
             });
         });
 
@@ -212,9 +212,9 @@ module.exports = session => {
             .orderBy('model2.id_col')
             .then(result => {
               expect(result).to.eql([
-                { model1Id: 1, model2Id: 1, $afterGetCalled: 1 },
-                { model1Id: 1, model2Id: 2, $afterGetCalled: 1 },
-                { model1Id: 1, model2Id: 3, $afterGetCalled: 1 }
+                { model1Id: 1, model2Id: 1, $afterFindCalled: 1 },
+                { model1Id: 1, model2Id: 2, $afterFindCalled: 1 },
+                { model1Id: 1, model2Id: 3, $afterFindCalled: 1 }
               ]);
             });
         });
@@ -483,7 +483,7 @@ module.exports = session => {
         it('.distinct()', () => {
           return Model1.query()
             .distinct('Model1.id', 'Model1.model1Prop1')
-            .leftJoinRelation('model1Relation1', { alias: 'balls' })
+            .leftJoinRelated('model1Relation1', { alias: 'balls' })
             .where('Model1.model1Prop1', 'hello 1')
             .orderBy('Model1.model1Prop1')
             .page(0, 1)
@@ -583,6 +583,7 @@ module.exports = session => {
             })
             .catch(err => {
               expect(err).to.be.a(Model1.NotFoundError);
+              expect(err.type).to.equal('NotFound');
               done();
             })
             .catch(done);
@@ -683,7 +684,7 @@ module.exports = session => {
                 model2Prop1: 'hejsan 3',
                 model2Prop2: 10,
                 concatProp: 'hejsan 310',
-                $afterGetCalled: 1
+                $afterFindCalled: 1
               });
             });
         });
@@ -718,6 +719,87 @@ module.exports = session => {
               expect(_.map(models, 'model2Prop2')).to.eql([40, 30, 20]);
             });
         });
+
+        if (session.isMySql()) {
+          it('fn in select', () => {
+            return Model2.query()
+              .select('model2.*', fn('concat', ref('model2_prop2'), '10').as('model2_prop2'))
+              .orderBy('id_col')
+              .then(models => {
+                expect(_.map(models, 'idCol')).to.eql([1, 2, 3]);
+                expect(_.map(models, 'model2Prop2')).to.eql(['3010', '2010', '1010']);
+              });
+          });
+
+          it('fn.concat in select', () => {
+            return Model2.query()
+              .select('model2.*', fn.concat(ref('model2_prop2'), '10').as('model2_prop2'))
+              .orderBy('id_col')
+              .then(models => {
+                expect(_.map(models, 'idCol')).to.eql([1, 2, 3]);
+                expect(_.map(models, 'model2Prop2')).to.eql(['3010', '2010', '1010']);
+              });
+          });
+        }
+
+        if (session.isPostgres()) {
+          it('fn in select', () => {
+            return Model2.query()
+              .select(
+                'model2.*',
+                fn('concat', ref('model2_prop2'), val('10').castText()).as('model2_prop2')
+              )
+              .orderBy('id_col')
+              .then(models => {
+                expect(_.map(models, 'idCol')).to.eql([1, 2, 3]);
+                expect(_.map(models, 'model2Prop2')).to.eql(['3010', '2010', '1010']);
+              });
+          });
+
+          it('fn.concat in select', () => {
+            return Model2.query()
+              .select(
+                'model2.*',
+                fn.concat(ref('model2_prop2'), val('10').castText()).as('model2_prop2')
+              )
+              .orderBy('id_col')
+              .then(models => {
+                expect(_.map(models, 'idCol')).to.eql([1, 2, 3]);
+                expect(_.map(models, 'model2Prop2')).to.eql(['3010', '2010', '1010']);
+              });
+          });
+
+          it('fn.coalesce in select', () => {
+            return Model2.query()
+              .select('model2.*', fn.coalesce(null, ref('model2_prop2')).as('foo'))
+              .orderBy('id_col')
+              .then(models => {
+                expect(_.map(models, 'idCol')).to.eql([1, 2, 3]);
+                expect(_.map(models, 'foo')).to.eql([30, 20, 10]);
+              });
+          });
+
+          it('fn.now in select', () => {
+            return Model2.query()
+              .select('model2.*', fn.now().as('lultz'))
+              .orderBy('id_col')
+              .then(models => {
+                expect(_.map(models, 'idCol')).to.eql([1, 2, 3]);
+                expect(models[0].lultz).to.be.a(Date);
+              });
+          });
+
+          it('fn.now(precision) in select', () => {
+            return Model2.query()
+              .select('model2.*', fn.now(0).as('lultz'))
+              .orderBy('id_col')
+              .then(models => {
+                expect(_.map(models, 'idCol')).to.eql([1, 2, 3]);
+                expect(models[0].lultz).to.be.a(Date);
+                expect(models[0].lultz.getMilliseconds()).to.equal(0);
+              });
+          });
+        }
 
         it('raw in where', () => {
           return Model2.query()
@@ -978,21 +1060,21 @@ module.exports = session => {
                   model1Id: 1,
                   model2Prop1: 'hejsan 1',
                   model2Prop2: 30,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 },
                 {
                   idCol: 2,
                   model1Id: 1,
                   model2Prop1: 'hejsan 2',
                   model2Prop2: 20,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 },
                 {
                   idCol: 3,
                   model1Id: 1,
                   model2Prop1: 'hejsan 3',
                   model2Prop2: 10,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 }
               ]);
             });
@@ -1166,6 +1248,10 @@ module.exports = session => {
           {
             id: 2,
 
+            model1Relation1: {
+              id: 4
+            },
+
             model1Relation2: [
               {
                 idCol: 3
@@ -1204,9 +1290,10 @@ module.exports = session => {
           .orderBy('id')
           .then(res => {
             expect(res).to.eql([
-              { id: 1, rel1Count: 1, rel2Count: '2', rel3Count: '1', $afterGetCalled: 1 },
-              { id: 2, rel1Count: 0, rel2Count: '1', rel3Count: '2', $afterGetCalled: 1 },
-              { id: 3, rel1Count: 0, rel2Count: '0', rel3Count: '0', $afterGetCalled: 1 }
+              { id: 1, rel1Count: 1, rel2Count: '2', rel3Count: '1', $afterFindCalled: 1 },
+              { id: 2, rel1Count: 1, rel2Count: '1', rel3Count: '2', $afterFindCalled: 1 },
+              { id: 3, rel1Count: 0, rel2Count: '0', rel3Count: '0', $afterFindCalled: 1 },
+              { id: 4, rel1Count: 0, rel2Count: '0', rel3Count: '0', $afterFindCalled: 1 }
             ]);
           });
       });
@@ -1232,9 +1319,10 @@ module.exports = session => {
           .orderBy('id')
           .then(res => {
             expect(res).to.eql([
-              { id: 1, rel1Count: 1, rel2Count: '2', rel3Count: '1', $afterGetCalled: 1 },
-              { id: 2, rel1Count: 0, rel2Count: '1', rel3Count: '2', $afterGetCalled: 1 },
-              { id: 3, rel1Count: 0, rel2Count: '0', rel3Count: '0', $afterGetCalled: 1 }
+              { id: 1, rel1Count: 1, rel2Count: '2', rel3Count: '1', $afterFindCalled: 1 },
+              { id: 2, rel1Count: 1, rel2Count: '1', rel3Count: '2', $afterFindCalled: 1 },
+              { id: 3, rel1Count: 0, rel2Count: '0', rel3Count: '0', $afterFindCalled: 1 },
+              { id: 4, rel1Count: 0, rel2Count: '0', rel3Count: '0', $afterFindCalled: 1 }
             ]);
           });
       });
@@ -1250,9 +1338,10 @@ module.exports = session => {
           .orderBy('id')
           .then(res => {
             expect(res).to.eql([
-              { id: 1, relId: 3, $afterGetCalled: 1 },
-              { id: 2, relId: null, $afterGetCalled: 1 },
-              { id: 3, relId: null, $afterGetCalled: 1 }
+              { id: 1, relId: 3, $afterFindCalled: 1 },
+              { id: 2, relId: 4, $afterFindCalled: 1 },
+              { id: 3, relId: null, $afterFindCalled: 1 },
+              { id: 4, relId: null, $afterFindCalled: 1 }
             ]);
           });
       });
@@ -1270,9 +1359,10 @@ module.exports = session => {
           .orderBy('id')
           .then(res => {
             expect(res).to.eql([
-              { id: 1, relId: 3, $afterGetCalled: 1 },
-              { id: 2, relId: null, $afterGetCalled: 1 },
-              { id: 3, relId: null, $afterGetCalled: 1 }
+              { id: 1, relId: 3, $afterFindCalled: 1 },
+              { id: 2, relId: 4, $afterFindCalled: 1 },
+              { id: 3, relId: null, $afterFindCalled: 1 },
+              { id: 4, relId: null, $afterFindCalled: 1 }
             ]);
           });
       });
@@ -1285,9 +1375,175 @@ module.exports = session => {
             expect(res.id).to.equal(1);
           });
       });
+
+      describe('for()', () => {
+        describe('belongs to one relation', () => {
+          it('find using single id', async () => {
+            const result = await Model1.relatedQuery('model1Relation1')
+              .for(1)
+              .orderBy('id');
+
+            expect(result.length).to.equal(1);
+            expect(result[0].id).to.equal(3);
+          });
+
+          it('find using single model instance', async () => {
+            const model = Model1.fromJson({ id: 1, model1Id: 3 });
+
+            const result = await Model1.relatedQuery('model1Relation1')
+              .for(model)
+              .orderBy('id');
+
+            expect(result.length).to.equal(1);
+            expect(result[0].id).to.equal(3);
+          });
+
+          it('find using multiple model instances', async () => {
+            const model1 = Model1.fromJson({ id: 1, model1Id: 3 });
+            const model2 = Model1.fromJson({ id: 2, model1Id: 4 });
+
+            const result = await Model1.relatedQuery('model1Relation1')
+              .for([model1, model2])
+              .orderBy('id');
+
+            expect(result.length).to.equal(2);
+            expect(result[0].id).to.equal(3);
+            expect(result[1].id).to.equal(4);
+          });
+
+          it('find using multiple ids', async () => {
+            const result = await Model1.relatedQuery('model1Relation1')
+              .for([1, 2])
+              .orderBy('id');
+
+            expect(result.length).to.equal(2);
+            expect(result[0].id).to.equal(3);
+            expect(result[1].id).to.equal(4);
+          });
+
+          it('find using multiple ids and a filter', async () => {
+            const result = await Model1.relatedQuery('model1Relation1')
+              .for([1, 2])
+              .whereNotIn('id', [1, 2, 3])
+              .orderBy('id');
+
+            expect(result.length).to.equal(1);
+            expect(result[0].id).to.equal(4);
+          });
+
+          it('find using query builder with one result', async () => {
+            const result = await Model1.relatedQuery('model1Relation1')
+              .for(Model1.query().findById(1))
+              .orderBy('id');
+
+            expect(result.length).to.equal(1);
+            expect(result[0].id).to.equal(3);
+          });
+
+          it('find using query builder with multiple results', async () => {
+            const result = await Model1.relatedQuery('model1Relation1')
+              .for(Model1.query().findByIds([1, 2]))
+              .orderBy('id');
+
+            expect(result.length).to.equal(2);
+            expect(result[0].id).to.equal(3);
+            expect(result[1].id).to.equal(4);
+          });
+        });
+
+        describe('has many relation', () => {
+          it('find using single id', async () => {
+            const result = await Model1.relatedQuery('model1Relation2')
+              .for(1)
+              .orderBy('id_col');
+
+            expect(result.length).to.equal(2);
+            expect(result[0].idCol).to.equal(1);
+            expect(result[1].idCol).to.equal(2);
+          });
+
+          it('find using multiple ids', async () => {
+            const result = await Model1.relatedQuery('model1Relation2')
+              .for([1, 2])
+              .orderBy('id_col');
+
+            expect(result.length).to.equal(3);
+            expect(result[0].idCol).to.equal(1);
+            expect(result[1].idCol).to.equal(2);
+            expect(result[2].idCol).to.equal(3);
+          });
+
+          it('find using query builder with one result', async () => {
+            const result = await Model1.relatedQuery('model1Relation2')
+              .for(Model1.query().findById(1))
+              .orderBy('id_col');
+
+            expect(result.length).to.equal(2);
+            expect(result[0].idCol).to.equal(1);
+            expect(result[1].idCol).to.equal(2);
+          });
+
+          it('find using query builder with multiple results', async () => {
+            const result = await Model1.relatedQuery('model1Relation2')
+              .for(Model1.query().findByIds([1, 2]))
+              .orderBy('id_col');
+
+            expect(result.length).to.equal(3);
+            expect(result[0].idCol).to.equal(1);
+            expect(result[1].idCol).to.equal(2);
+            expect(result[2].idCol).to.equal(3);
+          });
+        });
+
+        describe('many to many relation', () => {
+          it('find using single id', async () => {
+            const result = await Model1.relatedQuery('model1Relation3')
+              .for(1)
+              .orderBy('id_col');
+
+            expect(result.length).to.equal(1);
+            expect(result[0].idCol).to.equal(4);
+          });
+
+          it('find using multiple ids', async () => {
+            const result = await Model1.relatedQuery('model1Relation3')
+              .for([1, 2])
+              .orderBy('id_col');
+
+            expect(result.length).to.equal(3);
+            expect(result[0].idCol).to.equal(4);
+            expect(result[1].idCol).to.equal(5);
+            expect(result[2].idCol).to.equal(6);
+          });
+
+          it('find using query builder with one result', async () => {
+            const result = await Model1.relatedQuery('model1Relation3')
+              .for(Model1.query().findById(1))
+              .orderBy('id_col');
+
+            expect(result.length).to.equal(1);
+            expect(result[0].idCol).to.equal(4);
+          });
+
+          it('find using query builder with multiple results', async () => {
+            const result = await Model1.relatedQuery('model1Relation3')
+              .for(
+                Model1.query()
+                  .where('id', 1)
+                  .orWhere('id', 2)
+              )
+              .orderBy('id_col');
+
+            expect(result.length).to.equal(3);
+            expect(result[0].idCol).to.equal(4);
+            expect(result[1].idCol).to.equal(5);
+            expect(result[2].idCol).to.equal(6);
+          });
+        });
+      });
     });
 
-    describe('joinRelation()', () => {
+    describe('joinRelated()', () => {
       before(() => {
         return session.populate([
           {
@@ -1360,7 +1616,7 @@ module.exports = session => {
         ]);
       });
 
-      ['joinRelation', 'innerJoinRelation'].forEach(joinMethod => {
+      ['joinRelated', 'innerJoinRelated'].forEach(joinMethod => {
         it(`should join a belongs to one relation using ${joinMethod}`, () => {
           return Model1.query()
             .select('Model1.*', 'model1Relation1.model1Prop1 as rel_model1Prop1')
@@ -1378,7 +1634,7 @@ module.exports = session => {
         });
       });
 
-      ['leftJoinRelation', 'leftOuterJoinRelation'].forEach(joinMethod => {
+      ['leftJoinRelated', 'leftOuterJoinRelated'].forEach(joinMethod => {
         it(`should join a belongs to one relation using ${joinMethod}`, () => {
           return Model1.query()
             .select('Model1.id', 'model1Relation1.model1Prop1 as rel_model1Prop1')
@@ -1386,24 +1642,24 @@ module.exports = session => {
             .orderBy('Model1.id')
             .then(models => {
               expect(models).to.eql([
-                { id: 1, rel_model1Prop1: 'hello 2', $afterGetCalled: 1 },
-                { id: 2, rel_model1Prop1: 'hello 3', $afterGetCalled: 1 },
-                { id: 3, rel_model1Prop1: 'hello 4', $afterGetCalled: 1 },
-                { id: 4, rel_model1Prop1: null, $afterGetCalled: 1 },
-                { id: 5, rel_model1Prop1: null, $afterGetCalled: 1 },
-                { id: 6, rel_model1Prop1: null, $afterGetCalled: 1 },
-                { id: 7, rel_model1Prop1: 'hello 8', $afterGetCalled: 1 },
-                { id: 8, rel_model1Prop1: null, $afterGetCalled: 1 }
+                { id: 1, rel_model1Prop1: 'hello 2', $afterFindCalled: 1 },
+                { id: 2, rel_model1Prop1: 'hello 3', $afterFindCalled: 1 },
+                { id: 3, rel_model1Prop1: 'hello 4', $afterFindCalled: 1 },
+                { id: 4, rel_model1Prop1: null, $afterFindCalled: 1 },
+                { id: 5, rel_model1Prop1: null, $afterFindCalled: 1 },
+                { id: 6, rel_model1Prop1: null, $afterFindCalled: 1 },
+                { id: 7, rel_model1Prop1: 'hello 8', $afterFindCalled: 1 },
+                { id: 8, rel_model1Prop1: null, $afterFindCalled: 1 }
               ]);
             });
         });
       });
 
-      it('should be able to use `joinRelation` in a sub query (1)', () => {
+      it('should be able to use `joinRelated` in a sub query (1)', () => {
         return Model1.query()
           .from(
             Model1.query()
-              .joinRelation('model1Relation2')
+              .joinRelated('model1Relation2')
               .select('Model1.id', 'model1Relation2.id_col as m2r2Id')
               .as('inner')
           )
@@ -1411,21 +1667,21 @@ module.exports = session => {
           .orderBy(['id', 'm2r2Id'])
           .then(models => {
             expect(models).to.eql([
-              { id: 1, m2r2Id: 1, $afterGetCalled: 1 },
-              { id: 1, m2r2Id: 2, $afterGetCalled: 1 },
-              { id: 4, m2r2Id: 4, $afterGetCalled: 1 },
-              { id: 7, m2r2Id: 3, $afterGetCalled: 1 }
+              { id: 1, m2r2Id: 1, $afterFindCalled: 1 },
+              { id: 1, m2r2Id: 2, $afterFindCalled: 1 },
+              { id: 4, m2r2Id: 4, $afterFindCalled: 1 },
+              { id: 7, m2r2Id: 3, $afterFindCalled: 1 }
             ]);
           });
       });
 
-      it('should be able to use `joinRelation` in a sub query (2)', () => {
+      it('should be able to use `joinRelated` in a sub query (2)', () => {
         return Model1.query()
           .from(
             raw(
               '?',
               Model1.query()
-                .joinRelation('model1Relation2')
+                .joinRelated('model1Relation2')
                 .select('Model1.id', 'model1Relation2.id_col as m2r2Id')
                 .as('inner')
             )
@@ -1434,10 +1690,10 @@ module.exports = session => {
           .orderBy(['id', 'm2r2Id'])
           .then(models => {
             expect(models).to.eql([
-              { id: 1, m2r2Id: 1, $afterGetCalled: 1 },
-              { id: 1, m2r2Id: 2, $afterGetCalled: 1 },
-              { id: 4, m2r2Id: 4, $afterGetCalled: 1 },
-              { id: 7, m2r2Id: 3, $afterGetCalled: 1 }
+              { id: 1, m2r2Id: 1, $afterFindCalled: 1 },
+              { id: 1, m2r2Id: 2, $afterFindCalled: 1 },
+              { id: 4, m2r2Id: 4, $afterFindCalled: 1 },
+              { id: 7, m2r2Id: 3, $afterFindCalled: 1 }
             ]);
           });
       });
@@ -1445,7 +1701,7 @@ module.exports = session => {
       it('should join a has many relation (1)', () => {
         return Model1.query()
           .select('Model1.*', 'model1Relation2.id_col')
-          .joinRelation('model1Relation2')
+          .joinRelated('model1Relation2')
           .then(models => {
             models = _.sortBy(models, ['id', 'id_col']);
             expect(_.map(models, 'id')).to.eql([1, 1, 4, 7]);
@@ -1456,7 +1712,7 @@ module.exports = session => {
       it('should join a has many relation (2)', () => {
         return Model1.query()
           .select('Model1.*', 'model1Relation2.id_col')
-          .joinRelation('model1Relation2')
+          .joinRelated('model1Relation2')
           .where('model1Relation2.id_col', '<', 4)
           .then(models => {
             models = _.sortBy(models, ['id', 'id_col']);
@@ -1468,7 +1724,7 @@ module.exports = session => {
       it('should join a many to many relation (1)', () => {
         return Model2.query()
           .select('model2.*', 'model2Relation1.id')
-          .joinRelation('model2Relation1')
+          .joinRelated('model2Relation1')
           .then(models => {
             models = _.sortBy(models, ['idCol', 'id']);
             expect(_.map(models, 'idCol')).to.eql([1, 2, 2]);
@@ -1479,7 +1735,7 @@ module.exports = session => {
       it('should join a many to many relation (2)', () => {
         return Model2.query()
           .select('model2.*', 'model2Relation1.id')
-          .joinRelation('model2Relation1')
+          .joinRelated('model2Relation1')
           .whereBetween('model2Relation1.id', [5, 6])
           .then(models => {
             models = _.sortBy(models, ['idCol', 'id']);
@@ -1490,7 +1746,7 @@ module.exports = session => {
 
       it('should be able to specify innerJoin', () => {
         return Model1.query()
-          .innerJoinRelation('model1Relation1')
+          .innerJoinRelated('model1Relation1')
           .then(models => {
             expect(models.length).to.equal(4);
           });
@@ -1498,7 +1754,7 @@ module.exports = session => {
 
       it('should be able to specify leftJoin', () => {
         return Model1.query()
-          .leftJoinRelation('model1Relation1')
+          .leftJoinRelated('model1Relation1')
           .then(models => {
             expect(models.length).to.equal(8);
           });
@@ -1507,7 +1763,7 @@ module.exports = session => {
       it('should join an eager expression `a.a`', () => {
         return Model1.query()
           .select('Model1.id', 'Model1.model1Prop1')
-          .leftJoinRelation('model1Relation1.model1Relation1')
+          .leftJoinRelated('model1Relation1.model1Relation1')
           .where('model1Relation1:model1Relation1.model1Prop1', 'hello 4')
           .first()
           .then(model => {
@@ -1521,7 +1777,7 @@ module.exports = session => {
       it('should join an eager expression `a.b`', () => {
         return Model1.query()
           .select('Model1.id', 'Model1.model1Prop1')
-          .leftJoinRelation('model1Relation1.model1Relation2')
+          .leftJoinRelated('model1Relation1.model1Relation2')
           .where('model1Relation1:model1Relation2.model2_prop1', 'hejsan 4')
           .first()
           .then(model => {
@@ -1535,7 +1791,7 @@ module.exports = session => {
       it('aliases should work with eager expression `a.b`', () => {
         return Model1.query()
           .select('Model1.id', 'Model1.model1Prop1')
-          .leftJoinRelation('model1Relation1 as a . model1Relation2 as b')
+          .leftJoinRelated('model1Relation1 as a . model1Relation2 as b')
           .where('a:b.model2_prop1', 'hejsan 4')
           .first()
           .then(model => {
@@ -1549,7 +1805,7 @@ module.exports = session => {
       it('should join an eager expression `a.a.b`', () => {
         return Model1.query()
           .select('Model1.id', 'Model1.model1Prop1')
-          .leftJoinRelation('model1Relation1.model1Relation1.model1Relation2')
+          .leftJoinRelated('model1Relation1.model1Relation1.model1Relation2')
           .where('model1Relation1:model1Relation1:model1Relation2.model2_prop1', 'hejsan 4')
           .first()
           .then(model => {
@@ -1563,7 +1819,7 @@ module.exports = session => {
       it('should join an eager expression `[a, b]`', () => {
         return Model1.query()
           .select('Model1.id', 'Model1.model1Prop1', 'model1Relation2.model2_prop1 as model2Prop1')
-          .leftJoinRelation('[model1Relation1, model1Relation2]')
+          .leftJoinRelated('[model1Relation1, model1Relation2]')
           .where('model1Relation2.model2_prop1', 'hejsan 1')
           .first()
           .then(model => {
@@ -1582,7 +1838,7 @@ module.exports = session => {
             'model1Relation2:model2Relation1.model1Prop1 as foo',
             'model1Relation2.model2_prop1 as model2Prop1'
           )
-          .leftJoinRelation('[model1Relation1, model1Relation2.model2Relation1]')
+          .leftJoinRelated('[model1Relation1, model1Relation2.model2Relation1]')
           .where('model1Relation2:model2Relation1.model1Prop1', 'hello 6')
           .first()
           .then(model => {
@@ -1594,7 +1850,7 @@ module.exports = session => {
           });
       });
 
-      it('should be able to merge joinRelation calls', () => {
+      it('should be able to merge joinRelated calls', () => {
         return (
           Model1.query()
             .select(
@@ -1603,11 +1859,11 @@ module.exports = session => {
               'model1Relation2.id_col as m1r2Id',
               'model1Relation2:model2Relation1.id as m1r2M2r1Id'
             )
-            .joinRelation('model1Relation1')
+            .joinRelated('model1Relation1')
             // Join the same relation again for shits and giggles.
-            .joinRelation('model1Relation1')
-            .joinRelation('model1Relation2')
-            .joinRelation('model1Relation2.model2Relation1')
+            .joinRelated('model1Relation1')
+            .joinRelated('model1Relation2')
+            .joinRelated('model1Relation2.model2Relation1')
             .orderBy(['Model1.id', 'model1Relation2.id_col', 'model1Relation2:model2Relation1.id'])
             .then(models => {
               expect(models).to.eql([
@@ -1616,91 +1872,91 @@ module.exports = session => {
                   m1r1Id: 2,
                   m1r2Id: 1,
                   m1r2M2r1Id: 5,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 },
                 {
                   id: 1,
                   m1r1Id: 2,
                   m1r2Id: 2,
                   m1r2M2r1Id: 6,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 },
                 {
                   id: 1,
                   m1r1Id: 2,
                   m1r2Id: 2,
                   m1r2M2r1Id: 7,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 }
               ]);
             })
         );
       });
 
-      it('should be able to merge joinRelation calls with different aliases (1)', () => {
+      it('should be able to merge joinRelated calls with different aliases (1)', () => {
         return Model1.query()
           .select('Model1.id', 'm1r1.id as m1r1Id', 'm1r1_2.id as m1r1Id2')
-          .joinRelation('model1Relation1', {
+          .joinRelated('model1Relation1', {
             alias: 'm1r1'
           })
-          .joinRelation('model1Relation1', {
+          .joinRelated('model1Relation1', {
             alias: 'm1r1_2'
           })
           .orderBy('Model1.id')
           .then(models => {
             expect(models).to.eql([
-              { id: 1, m1r1Id: 2, m1r1Id2: 2, $afterGetCalled: 1 },
-              { id: 2, m1r1Id: 3, m1r1Id2: 3, $afterGetCalled: 1 },
-              { id: 3, m1r1Id: 4, m1r1Id2: 4, $afterGetCalled: 1 },
-              { id: 7, m1r1Id: 8, m1r1Id2: 8, $afterGetCalled: 1 }
+              { id: 1, m1r1Id: 2, m1r1Id2: 2, $afterFindCalled: 1 },
+              { id: 2, m1r1Id: 3, m1r1Id2: 3, $afterFindCalled: 1 },
+              { id: 3, m1r1Id: 4, m1r1Id2: 4, $afterFindCalled: 1 },
+              { id: 7, m1r1Id: 8, m1r1Id2: 8, $afterFindCalled: 1 }
             ]);
           });
       });
 
-      it('should be able to merge joinRelation calls with different aliases (2)', () => {
+      it('should be able to merge joinRelated calls with different aliases (2)', () => {
         return Model1.query()
           .select('Model1.id', 'm1r1.id as m1r1Id', 'm1r1_2.id as m1r1Id2')
-          .joinRelation('model1Relation1 as m1r1')
-          .joinRelation('model1Relation1 as m1r1_2')
+          .joinRelated('model1Relation1 as m1r1')
+          .joinRelated('model1Relation1 as m1r1_2')
           .orderBy('Model1.id')
           .then(models => {
             expect(models).to.eql([
-              { id: 1, m1r1Id: 2, m1r1Id2: 2, $afterGetCalled: 1 },
-              { id: 2, m1r1Id: 3, m1r1Id2: 3, $afterGetCalled: 1 },
-              { id: 3, m1r1Id: 4, m1r1Id2: 4, $afterGetCalled: 1 },
-              { id: 7, m1r1Id: 8, m1r1Id2: 8, $afterGetCalled: 1 }
+              { id: 1, m1r1Id: 2, m1r1Id2: 2, $afterFindCalled: 1 },
+              { id: 2, m1r1Id: 3, m1r1Id2: 3, $afterFindCalled: 1 },
+              { id: 3, m1r1Id: 4, m1r1Id2: 4, $afterFindCalled: 1 },
+              { id: 7, m1r1Id: 8, m1r1Id2: 8, $afterFindCalled: 1 }
             ]);
           });
       });
 
-      it('should be able to merge different joinRelation calls', () => {
+      it('should be able to merge different joinRelated calls', () => {
         return Model1.query()
           .select('Model1.id', 'm1r1.id as m1r1Id', 'model1Relation2.id_col as m1r2Id')
-          .joinRelation('model1Relation1', {
+          .joinRelated('model1Relation1', {
             alias: 'm1r1'
           })
-          .leftJoinRelation('model1Relation2')
+          .leftJoinRelated('model1Relation2')
           .orderBy(['Model1.id', 'model1Relation2.id_col'])
           .then(models => {
             expect(models).to.eql([
-              { id: 1, m1r1Id: 2, m1r2Id: 1, $afterGetCalled: 1 },
-              { id: 1, m1r1Id: 2, m1r2Id: 2, $afterGetCalled: 1 },
-              { id: 2, m1r1Id: 3, m1r2Id: null, $afterGetCalled: 1 },
-              { id: 3, m1r1Id: 4, m1r2Id: null, $afterGetCalled: 1 },
-              { id: 7, m1r1Id: 8, m1r2Id: 3, $afterGetCalled: 1 }
+              { id: 1, m1r1Id: 2, m1r2Id: 1, $afterFindCalled: 1 },
+              { id: 1, m1r1Id: 2, m1r2Id: 2, $afterFindCalled: 1 },
+              { id: 2, m1r1Id: 3, m1r2Id: null, $afterFindCalled: 1 },
+              { id: 3, m1r1Id: 4, m1r2Id: null, $afterFindCalled: 1 },
+              { id: 7, m1r1Id: 8, m1r2Id: 3, $afterFindCalled: 1 }
             ]);
           });
       });
 
-      it('should be able to merge joinRelation calls with different aliases (3)', () => {
+      it('should be able to merge joinRelated calls with different aliases (3)', () => {
         return Model1.query()
           .select('Model1.id', 'm1r1.id as m1r1Id', 'm1r1_2.id as m1r1Id2')
-          .joinRelation('model1Relation1', {
+          .joinRelated('model1Relation1', {
             aliases: {
               model1Relation1: 'm1r1'
             }
           })
-          .joinRelation('model1Relation1', {
+          .joinRelated('model1Relation1', {
             aliases: {
               model1Relation1: 'm1r1_2'
             }
@@ -1708,15 +1964,15 @@ module.exports = session => {
           .orderBy('Model1.id')
           .then(models => {
             expect(models).to.eql([
-              { id: 1, m1r1Id: 2, m1r1Id2: 2, $afterGetCalled: 1 },
-              { id: 2, m1r1Id: 3, m1r1Id2: 3, $afterGetCalled: 1 },
-              { id: 3, m1r1Id: 4, m1r1Id2: 4, $afterGetCalled: 1 },
-              { id: 7, m1r1Id: 8, m1r1Id2: 8, $afterGetCalled: 1 }
+              { id: 1, m1r1Id: 2, m1r1Id2: 2, $afterFindCalled: 1 },
+              { id: 2, m1r1Id: 3, m1r1Id2: 3, $afterFindCalled: 1 },
+              { id: 3, m1r1Id: 4, m1r1Id2: 4, $afterFindCalled: 1 },
+              { id: 7, m1r1Id: 8, m1r1Id2: 8, $afterFindCalled: 1 }
             ]);
           });
       });
 
-      it('should be able to merge leftJoinRelation calls', () => {
+      it('should be able to merge leftJoinRelated calls', () => {
         return (
           Model1.query()
             .select(
@@ -1724,11 +1980,11 @@ module.exports = session => {
               'model1Relation2:model2Relation1.model1Prop1 as foo',
               'model1Relation2.model2_prop1 as model2Prop1'
             )
-            .leftJoinRelation('model1Relation1')
+            .leftJoinRelated('model1Relation1')
             // Join the same relation again for shits and giggles.
-            .leftJoinRelation('model1Relation1')
-            .leftJoinRelation('model1Relation2')
-            .leftJoinRelation('model1Relation2.model2Relation1')
+            .leftJoinRelated('model1Relation1')
+            .leftJoinRelated('model1Relation2')
+            .leftJoinRelated('model1Relation2.model2Relation1')
             .where('model1Relation2:model2Relation1.model1Prop1', 'hello 6')
             .first()
             .then(model => {
@@ -1749,7 +2005,7 @@ module.exports = session => {
             'm1r2:m2r1.model1Prop1 as foo',
             'm1r2.model2_prop1 as model2Prop1'
           ])
-          .leftJoinRelation('[model1Relation1.model1Relation1, model1Relation2.model2Relation1]', {
+          .leftJoinRelated('[model1Relation1.model1Relation1, model1Relation2.model2Relation1]', {
             aliases: {
               model1Relation1: 'm1r1',
               model1Relation2: 'm1r2',
@@ -1776,7 +2032,7 @@ module.exports = session => {
             'm1r2:m2r1.model1Prop1 as foo',
             'm1r2.model2_prop1 as model2Prop1'
           ])
-          .leftJoinRelation(
+          .leftJoinRelated(
             `[
             model1Relation1 as m1r1.[
               model1Relation1 as m1r1
@@ -1806,7 +2062,7 @@ module.exports = session => {
             'm1r2:m2r1.model1Prop1 as foo',
             'm1r2.model2_prop1 as model2Prop1'
           ])
-          .leftJoinRelation({
+          .leftJoinRelated({
             m1r1: {
               $relation: 'model1Relation1',
 
@@ -1838,7 +2094,7 @@ module.exports = session => {
       it('should disable alias with option alias = false', () => {
         return Model1.query()
           .select('model2.*', 'Model1.id')
-          .joinRelation('model1Relation2', { alias: false })
+          .joinRelated('model1Relation2', { alias: false })
           .where('model2.id_col', '<', 4)
           .then(models => {
             models = _.sortBy(models, ['id', 'id_col']);
@@ -1850,7 +2106,7 @@ module.exports = session => {
       it('should use relation name as alias with option alias = true', () => {
         return Model1.query()
           .select('Model1.*', 'model1Relation2.id_col')
-          .joinRelation('model1Relation2', { alias: true })
+          .joinRelated('model1Relation2', { alias: true })
           .where('model1Relation2.id_col', '<', 4)
           .then(models => {
             models = _.sortBy(models, ['id', 'id_col']);
@@ -1862,7 +2118,7 @@ module.exports = session => {
       it('should use custom alias with option alias = string', () => {
         return Model1.query()
           .select('Model1.*', 'fooBarBaz.id_col')
-          .joinRelation('model1Relation2', { alias: 'fooBarBaz' })
+          .joinRelated('model1Relation2', { alias: 'fooBarBaz' })
           .where('fooBarBaz.id_col', '<', 4)
           .then(models => {
             models = _.sortBy(models, ['id', 'id_col']);
@@ -1873,7 +2129,7 @@ module.exports = session => {
 
       it('should join eager expression a.b.c, select c.* and cast result to c', () => {
         return Model1.query()
-          .joinRelation('model1Relation2.model2Relation1.model1Relation1')
+          .joinRelated('model1Relation2.model2Relation1.model1Relation1')
           .select([
             'model1Relation2:model2Relation1:model1Relation1.id as id_col',
             'model1Relation2:model2Relation1.id as model1_id'
@@ -1885,7 +2141,7 @@ module.exports = session => {
               {
                 idCol: 8,
                 model1Id: 7,
-                $afterGetCalled: 1
+                $afterFindCalled: 1
               }
             ]);
           });
@@ -1893,7 +2149,7 @@ module.exports = session => {
 
       it('should join eager expression a.b.c, select columns with aliases and cast result to Model', () => {
         return Model1.query()
-          .joinRelation('model1Relation2.model2Relation1.model1Relation1')
+          .joinRelated('model1Relation2.model2Relation1.model1Relation1')
           .select([
             'model1Relation2:model2Relation1:model1Relation1.id as someId',
             'model1Relation2:model2Relation1.id as someOtherId'
@@ -1914,27 +2170,29 @@ module.exports = session => {
 
       it('should count related models', () => {
         return Model1.query()
-          .leftJoinRelation('model1Relation2')
+          .leftJoinRelated('model1Relation2')
           .select('Model1.id', 'Model1.model1Prop1')
           .count('Model1.id as relCount')
           .groupBy('Model1.id', 'Model1.model1Prop1')
           .findByIds([1, 2])
           .orderBy('id')
-          .map(it => {
-            it.relCount = parseInt(it.relCount);
-            return it;
+          .then(result => {
+            return result.map(it => {
+              it.relCount = parseInt(it.relCount);
+              return it;
+            });
           })
           .then(res => {
             expect(res).to.eql([
-              { id: 1, model1Prop1: 'hello 1', relCount: 2, $afterGetCalled: 1 },
-              { id: 2, model1Prop1: 'hello 2', relCount: 1, $afterGetCalled: 1 }
+              { id: 1, model1Prop1: 'hello 1', relCount: 2, $afterFindCalled: 1 },
+              { id: 2, model1Prop1: 'hello 2', relCount: 1, $afterFindCalled: 1 }
             ]);
           });
       });
 
       it('should work with modifiers', () => {
         return Model2.query()
-          .joinRelation('model2Relation1(idGreaterThan)')
+          .joinRelated('model2Relation1(idGreaterThan)')
           .select('model2Relation1.id', 'model2.*')
           .mergeContext({
             filterArgs: [5]
@@ -1971,7 +2229,7 @@ module.exports = session => {
           }
 
           return TestModel1.query()
-            .joinRelation('model1Relation2(rawSelect)')
+            .joinRelated('model1Relation2(rawSelect)')
             .select('rawSelect')
             .findById(1)
             .where('model1Relation2.id_col', 2)
@@ -2101,13 +2359,13 @@ module.exports = session => {
         it('should return all related rows when no knex methods are chained', () => {
           return parent1.$relatedQuery('model1Relation1').then(related => {
             expect(related).to.be.a(Model1);
-            expect(parent1.model1Relation1).to.eql(related);
+            expect(parent1.model1Relation1).to.eql(undefined);
             expect(related).to.eql({
               id: 2,
               model1Id: null,
               model1Prop1: 'hello 2',
               model1Prop2: null,
-              $afterGetCalled: 1
+              $afterFindCalled: 1
             });
           });
         });
@@ -2119,7 +2377,7 @@ module.exports = session => {
               .select('id')
               .then(related => {
                 expect(related).to.be.a(Model1);
-                expect(_.keys(related).sort()).to.eql(['$afterGetCalled', 'id']);
+                expect(_.keys(related).sort()).to.eql(['$afterFindCalled', 'id']);
               });
           });
 
@@ -2133,7 +2391,7 @@ module.exports = session => {
                   model1Id: null,
                   model1Prop1: 'hello 2',
                   model1Prop2: null,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 });
               });
           });
@@ -2151,7 +2409,7 @@ module.exports = session => {
                   model1Prop1: 'hello 2',
                   model1Prop2: null,
                   parentProp1: 'hello 1',
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 });
               });
           });
@@ -2223,7 +2481,7 @@ module.exports = session => {
               .orderBy('id_col')
               .then(related => {
                 expect(related.length).to.equal(3);
-                expect(parent1.model1Relation2).to.eql(related);
+                expect(parent1.model1Relation2).to.equal(undefined);
                 expect(related[0]).to.be.a(Model2);
                 expect(related[1]).to.be.a(Model2);
                 expect(related[2]).to.be.a(Model2);
@@ -2233,7 +2491,7 @@ module.exports = session => {
                   model1Id: parent1.id,
                   model2Prop1: 'text 1',
                   model2Prop2: 6,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 });
               }),
             parent2
@@ -2241,7 +2499,7 @@ module.exports = session => {
               .orderBy('id_col')
               .then(related => {
                 expect(related.length).to.equal(3);
-                expect(parent2.model1Relation2).to.eql(related);
+                expect(parent2.model1Relation2).to.equal(undefined);
                 expect(related[0]).to.be.a(Model2);
                 expect(related[1]).to.be.a(Model2);
                 expect(related[2]).to.be.a(Model2);
@@ -2251,7 +2509,7 @@ module.exports = session => {
                   model1Id: parent2.id,
                   model2Prop1: 'text 4',
                   model2Prop2: 3,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 });
               })
           ]);
@@ -2269,7 +2527,7 @@ module.exports = session => {
                 expect(related[2]).to.be.a(Model2);
                 expect(_.map(related, 'idCol').sort()).to.eql([1, 2, 3]);
                 expect(_.uniq(_.flattenDeep(_.map(related, _.keys))).sort()).to.eql([
-                  '$afterGetCalled',
+                  '$afterFindCalled',
                   'idCol'
                 ]);
               });
@@ -2282,6 +2540,14 @@ module.exports = session => {
               .then(related => {
                 expect(_.map(related, 'model2Prop2')).to.eql([2]);
               });
+          });
+
+          it('.max()', async () => {
+            const [{ max }] = await parent2
+              .$relatedQuery('model1Relation2')
+              .max('model2_prop2 as max');
+
+            expect(max).to.equal(3);
           });
 
           it('.orWhere()', () => {
@@ -2343,7 +2609,7 @@ module.exports = session => {
                   model2Prop1: 'text 6',
                   model2Prop2: 1,
                   parentProp1: parent2.model1Prop1,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 });
               });
           });
@@ -2429,7 +2695,7 @@ module.exports = session => {
               .orderBy('id')
               .then(related => {
                 expect(related.length).to.equal(3);
-                expect(parent1.model2Relation1).to.eql(related);
+                expect(parent1.model2Relation1).to.equal(undefined);
                 expect(related[0]).to.be.a(Model1);
                 expect(related[1]).to.be.a(Model1);
                 expect(related[2]).to.be.a(Model1);
@@ -2441,7 +2707,7 @@ module.exports = session => {
                   model1Prop1: 'blaa 1',
                   model1Prop2: 6,
                   aliasedExtra: null,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 });
               }),
             parent2
@@ -2449,7 +2715,7 @@ module.exports = session => {
               .orderBy('id')
               .then(related => {
                 expect(related.length).to.equal(3);
-                expect(parent2.model2Relation1).to.eql(related);
+                expect(parent2.model2Relation1).to.equal(undefined);
                 expect(related[0]).to.be.a(Model1);
                 expect(related[1]).to.be.a(Model1);
                 expect(related[2]).to.be.a(Model1);
@@ -2461,7 +2727,7 @@ module.exports = session => {
                   model1Prop1: 'blaa 4',
                   model1Prop2: 3,
                   aliasedExtra: 'extra 4',
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 });
               })
           ]);
@@ -2493,7 +2759,7 @@ module.exports = session => {
                   model1Prop1: 'blaa 6',
                   model1Prop2: 1,
                   aliasedExtra: 'extra 6',
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 }
               ]);
             });
@@ -2512,7 +2778,7 @@ module.exports = session => {
                   model1Prop1: 'blaa 6',
                   model1Prop2: 1,
                   aliasedExtra: 'extra 6',
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 }
               ]);
             });
@@ -2530,7 +2796,7 @@ module.exports = session => {
                 expect(related[2]).to.be.a(Model1);
                 expect(_.map(related, 'id').sort()).to.eql([3, 4, 5]);
                 expect(_.uniq(_.flattenDeep(_.map(related, _.keys))).sort()).to.eql([
-                  '$afterGetCalled',
+                  '$afterFindCalled',
                   'id'
                 ]);
               });
@@ -2543,6 +2809,14 @@ module.exports = session => {
               .then(related => {
                 expect(_.map(related, 'model1Prop2')).to.eql([2]);
               });
+          });
+
+          it('.max()', async () => {
+            const [{ min }] = await parent2
+              .$relatedQuery('model2Relation1')
+              .min('model1Prop1 as min');
+
+            expect(min).to.equal('blaa 4');
           });
 
           it('.orWhere()', () => {
@@ -2633,7 +2907,7 @@ module.exports = session => {
               model1Id: null,
               model1Prop1: 'blaa 1',
               model1Prop2: 6,
-              $afterGetCalled: 1
+              $afterFindCalled: 1
             });
           });
         });

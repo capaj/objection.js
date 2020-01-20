@@ -80,12 +80,12 @@ module.exports = session => {
       mockKnex.reset();
     });
 
-    it('should get passed to the $afterGet method', () => {
+    it('should get passed to the $afterFind method', () => {
       let Model = inheritModel(Model1);
       let context = { a: 1, b: '2' };
       let called = false;
 
-      Model.prototype.$afterGet = queryContext => {
+      Model.prototype.$afterFind = queryContext => {
         expect(queryContext).to.eql(context);
         expect(context.transaction).to.equal(undefined);
         expect(queryContext.transaction).to.equal(mockKnex);
@@ -275,7 +275,7 @@ module.exports = session => {
               },
               runBefore: (data, builder) => {
                 if (builder.isExecutable()) {
-                  queries.push(builder.toSql());
+                  queries.push(builder.toKnexQuery().toString());
                 }
               }
             })
@@ -310,7 +310,7 @@ module.exports = session => {
               },
               runBefore: function() {
                 if (this.isExecutable()) {
-                  queries.push(this.toSql());
+                  queries.push(this.toKnexQuery().toString());
                 }
               }
             })
@@ -368,7 +368,7 @@ module.exports = session => {
               runBefore: [
                 function() {
                   if (this.isExecutable()) {
-                    queries.push(this.toSql());
+                    queries.push(this.toKnexQuery().toString());
                   }
                 }
               ],
@@ -475,7 +475,7 @@ module.exports = session => {
               },
               runBefore: function() {
                 if (this.isExecutable()) {
-                  queries.push(this.toSql());
+                  queries.push(this.toKnexQuery().toString());
                 }
               },
               runAfter: models => {
@@ -506,21 +506,21 @@ module.exports = session => {
                   model1Prop1: 'hello 1',
                   model1Prop2: null,
                   computed: 'hello 1 computed1 after',
-                  $afterGetCalled: 1,
+                  $afterFindCalled: 1,
                   model1Relation1: {
                     id: 2,
                     model1Id: 3,
                     model1Prop1: 'hello 2',
                     model1Prop2: null,
                     computed: 'hello 2 computed1 after',
-                    $afterGetCalled: 1,
+                    $afterFindCalled: 1,
                     model1Relation1: {
                       id: 3,
                       model1Id: null,
                       model1Prop1: 'hello 3',
                       model1Prop2: null,
                       computed: 'hello 3 computed1 after',
-                      $afterGetCalled: 1
+                      $afterFindCalled: 1
                     },
                     model1Relation2: [
                       {
@@ -529,7 +529,7 @@ module.exports = session => {
                         model2Prop1: 'hejsan 1',
                         model2Prop2: 30,
                         computed: 'hejsan 1 computed2 after',
-                        $afterGetCalled: 1,
+                        $afterFindCalled: 1,
                         model2Relation1: [
                           {
                             id: 4,
@@ -537,7 +537,7 @@ module.exports = session => {
                             model1Prop1: 'hello 4',
                             model1Prop2: null,
                             computed: 'hello 4 computed1 after',
-                            $afterGetCalled: 1
+                            $afterFindCalled: 1
                           }
                         ]
                       },
@@ -548,7 +548,7 @@ module.exports = session => {
                         model2Prop2: 20,
                         computed: 'hejsan 2 computed2 after',
                         model2Relation1: [],
-                        $afterGetCalled: 1
+                        $afterFindCalled: 1
                       }
                     ]
                   }
@@ -574,7 +574,7 @@ module.exports = session => {
           .context({
             runAfter: (res, builder) => {
               if (builder.isExecutable()) {
-                queries.push(builder.toSql());
+                queries.push(builder.toKnexQuery().toString());
               }
             }
           })
@@ -602,7 +602,7 @@ module.exports = session => {
           .context({
             runAfter: (res, builder) => {
               if (builder.isExecutable()) {
-                queries.push(builder.toSql());
+                queries.push(builder.toKnexQuery().toString());
               }
             }
           })
@@ -631,7 +631,7 @@ module.exports = session => {
           .context({
             runAfter: (res, builder) => {
               if (builder.isExecutable()) {
-                queries.push(builder.toSql());
+                queries.push(builder.toKnexQuery().toString());
               }
             }
           })
@@ -660,7 +660,7 @@ module.exports = session => {
           .context({
             runAfter: (res, builder) => {
               if (builder.isExecutable()) {
-                queries.push(builder.toSql());
+                queries.push(builder.toKnexQuery().toString());
               }
             }
           })
@@ -714,7 +714,7 @@ module.exports = session => {
                   },
                   runBefore: function() {
                     if (this.isExecutable()) {
-                      queries.push(this.toSql());
+                      queries.push(this.toKnexQuery().toString());
                     }
                   }
                 })
@@ -722,7 +722,7 @@ module.exports = session => {
                   expect(mockKnex.executedQueries).to.eql(queries);
                   expect(mockKnex.executedQueries).to.eql([
                     'insert into "public"."Model1" ("model1Prop1") values (\'new\') returning "id", "model1Prop1" || \' computed1\' as computed',
-                    'update "public"."Model1" set "model1Id" = 5 where "Model1"."id" = 4 returning "id", "model1Prop1" || \' computed1\' as computed'
+                    'update "public"."Model1" set "model1Id" = 5 where "Model1"."id" in (4) returning "id", "model1Prop1" || \' computed1\' as computed'
                   ]);
 
                   expect(model.toJSON()).to.eql({
@@ -749,14 +749,14 @@ module.exports = session => {
                   },
                   runBefore: function() {
                     if (this.isExecutable()) {
-                      queries.push(this.toSql());
+                      queries.push(this.toKnexQuery().toString());
                     }
                   }
                 })
                 .then(() => {
                   expect(mockKnex.executedQueries).to.eql(queries);
                   expect(mockKnex.executedQueries).to.eql([
-                    'update "public"."Model1" set "model1Id" = 1 where "Model1"."id" = 4 returning *'
+                    'update "public"."Model1" set "model1Id" = 1 where "Model1"."id" in (4) returning *'
                   ]);
 
                   return session.knex('Model1').where('id', 4);
@@ -782,14 +782,14 @@ module.exports = session => {
                   },
                   runBefore: function() {
                     if (this.isExecutable()) {
-                      queries.push(this.toSql());
+                      queries.push(this.toKnexQuery().toString());
                     }
                   }
                 })
                 .then(() => {
                   expect(mockKnex.executedQueries).to.eql(queries);
                   expect(mockKnex.executedQueries).to.eql([
-                    'update "public"."Model1" set "model1Id" = NULL where "Model1"."id" = 2 returning *'
+                    'update "public"."Model1" set "model1Id" = NULL where "Model1"."id" in (2) returning *'
                   ]);
 
                   return session.knex('Model1').where('id', 2);
@@ -834,7 +834,7 @@ module.exports = session => {
                   },
                   runBefore: function() {
                     if (this.isExecutable()) {
-                      queries.push(this.toSql());
+                      queries.push(this.toKnexQuery().toString());
                     }
                   }
                 })
@@ -867,14 +867,14 @@ module.exports = session => {
                   },
                   runBefore: function() {
                     if (this.isExecutable()) {
-                      queries.push(this.toSql());
+                      queries.push(this.toKnexQuery().toString());
                     }
                   }
                 })
                 .then(() => {
                   expect(mockKnex.executedQueries).to.eql(queries);
                   expect(mockKnex.executedQueries).to.eql([
-                    'update "public"."model2" set "model1_id" = NULL where "model2"."model1_id" = 2 returning *'
+                    'update "public"."model2" set "model1_id" = NULL where "model2"."model1_id" in (2) returning *'
                   ]);
 
                   return session.knex('model2');
@@ -922,7 +922,7 @@ module.exports = session => {
                     }
                   },
                   runBefore: function() {
-                    queries.push(this.toSql());
+                    queries.push(this.toKnexQuery().toString());
                   }
                 })
                 .then(model => {
@@ -956,7 +956,7 @@ module.exports = session => {
                   },
                   runBefore: function() {
                     if (this.isExecutable()) {
-                      queries.push(this.toSql());
+                      queries.push(this.toKnexQuery().toString());
                     }
                   }
                 })
@@ -987,14 +987,14 @@ module.exports = session => {
                 .context({
                   runBefore: function() {
                     if (this.isExecutable()) {
-                      queries.push(this.toSql());
+                      queries.push(this.toKnexQuery().toString());
                     }
                   }
                 })
                 .then(() => {
                   expect(mockKnex.executedQueries).to.eql(queries);
                   expect(mockKnex.executedQueries).to.eql([
-                    `delete from \"public\".\"Model1Model2\" where \"Model1Model2\".\"model1Id\" in (select \"Model1\".\"id\" from \"public\".\"Model1\" inner join \"public\".\"Model1Model2\" on \"Model1\".\"id\" = \"Model1Model2\".\"model1Id\" where \"Model1Model2\".\"model2Id\" in (1) and \"Model1\".\"id\" = 4) and \"Model1Model2\".\"model2Id\" = 1`
+                    `delete from \"public\".\"Model1Model2\" where \"Model1Model2\".\"model1Id\" in (select \"Model1\".\"id\" from \"public\".\"Model1\" inner join \"public\".\"Model1Model2\" on \"Model1\".\"id\" = \"Model1Model2\".\"model1Id\" where \"Model1Model2\".\"model2Id\" in (1) and \"Model1\".\"id\" = 4) and \"Model1Model2\".\"model2Id\" in (1)`
                   ]);
 
                   return session.knex('Model1Model2');

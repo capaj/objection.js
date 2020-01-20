@@ -1,8 +1,19 @@
 import * as ajv from 'ajv';
 import * as knex from 'knex';
-
-import * as objection from '../../typings/objection';
-import { lit, raw, ref, RelationMappings } from '../../typings/objection';
+import * as objection from '../../';
+import {
+  DBError,
+  fn,
+  JSONSchema,
+  lit,
+  raw,
+  ref,
+  RelationMappings,
+  RelationMapping,
+  QueryBuilder,
+  StaticHookArguments
+} from '../../';
+import Knex = require('knex');
 
 // This file exercises the Objection.js typings.
 
@@ -51,14 +62,50 @@ class Person extends objection.Model {
 
   static columnNameMappers = objection.snakeCaseMappers();
 
+  static jsonSchema = {
+    type: 'object',
+
+    properties: {
+      firstName: {
+        type: 'string'
+      }
+    }
+  };
+
+  static async beforeFind({
+    asFindQuery,
+    cancelQuery
+  }: StaticHookArguments<Person>): Promise<void> {
+    takesPeople(await asFindQuery());
+    cancelQuery([]);
+  }
+
+  static async afterUpdate({
+    asFindQuery,
+    result,
+    items
+  }: StaticHookArguments<Person, number>): Promise<void> {
+    takesPeople(await asFindQuery());
+    takesNumber(result!);
+    takesPeople(items as Person[]);
+  }
+
   examplePersonMethod = (arg: string) => 1;
+
+  static staticExamplePersonMethod() {
+    return 100;
+  }
 
   petsWithId(petId: number): Promise<Animal[]> {
     return this.$relatedQuery('pets').where('id', petId);
   }
 
+  commentsWithId(commentId: number): Promise<Comment[]> {
+    return this.$relatedQuery('comments').where('id', commentId);
+  }
+
   fetchMom(): Promise<Person | undefined> {
-    return this.$relatedQuery<Person>('mom').first();
+    return this.$relatedQuery('mom');
   }
 
   async $beforeInsert(queryContext: objection.QueryContext) {
@@ -95,13 +142,31 @@ class Person extends objection.Model {
     return new CustomValidationError('my custom error: ' + message + ' ' + itemMessage);
   }
 
-  static get modifiers() {
-    return {
-      myFilter(builder: objection.QueryBuilder<Person>) {
-        return builder.orderBy('date');
+  static modifiers = {
+    myFilter(query: QueryBuilder<Person>) {
+      query.where('something', 'something');
+    }
+  };
+
+  static relationMappings = () => ({
+    fancyPets: {
+      modelClass: Animal,
+      relation: objection.Model.HasManyRelation,
+
+      beforeInsert(pet) {
+        pet.name = pet.name + ' Fancy Pants';
+      },
+
+      modify(query) {
+        query.where('name', 'like', '% Fancy Pants');
+      },
+
+      join: {
+        from: 'person.ownerId',
+        to: 'pet.id'
       }
-    };
-  }
+    } as RelationMapping<Animal>
+  });
 }
 
 function takesModelSubclass<M extends objection.Model>(m: M) {}
@@ -113,6 +178,7 @@ const takesPerson = (person: Person) => {
 };
 const takesMaybePerson = (_: Person | undefined) => 1;
 const takesPeople = (_: Person[]) => 1;
+const takesNumber = (_: number) => 1;
 
 async function takesPersonClass(PersonClass: typeof Person) {
   takesPerson(new PersonClass());
@@ -145,7 +211,7 @@ async () => {
 async () => {
   takesMaybePerson(
     await Person.query()
-      .where('raw SQL constraint')
+      .where(raw('raw SQL constraint'))
       .first()
   );
   takesMaybePerson(
@@ -164,7 +230,7 @@ async () => {
       .first()
   );
 
-  takesMaybePerson(await Person.query().findOne('raw SQL constraint'));
+  takesMaybePerson(await Person.query().findOne(raw('raw SQL constraint')));
   takesMaybePerson(await Person.query().findOne('lastName', lastName));
   takesMaybePerson(await Person.query().findOne('lastName', '>', lastName));
   takesMaybePerson(await Person.query().findOne({ lastName }));
@@ -217,12 +283,16 @@ async () => {
       qb => qb.table(Person.tableName).where({ lastName: 'black' }),
       true
     );
+
+  await Person.query().intersect(Person.query().where({ lastName: 'doe' }), qb =>
+    qb.table(Person.tableName).where({ lastName: 'black' })
+  );
 };
 
 // .query().castTo()
 async () => {
   const animals = await Person.query()
-    .joinRelation('children.children.pets')
+    .joinRelated('children.children.pets')
     .select('children:children:pets.*')
     .castTo(Animal);
 
@@ -250,6 +320,10 @@ class Movie extends objection.Model {
   actors!: Person[];
   // prettier-ignore
   director!: Person;
+
+  fetchDirector(): Promise<Person> {
+    return this.$relatedQuery('director');
+  }
 
   /**
    * This static field instructs Objection how to hydrate and persist
@@ -293,12 +367,8 @@ async () => {
   takesPeople(await new Movie().$relatedQuery('actors'));
   takesPerson(await new Movie().$relatedQuery('director'));
 
-  // If you need to do subsequent changes to $relatedQuery, though, you need
-  // to cast: :\
-  takesMaybePerson(await new Movie().$relatedQuery<Person>('actors').first());
-  takesMaybePerson(
-    await new Movie().$relatedQuery<Person, Person>('director').where('age', '>', 32)
-  );
+  takesMaybePerson(await new Movie().$relatedQuery('actors').first());
+  takesMaybePerson(await new Movie().$relatedQuery('director').where('age', '>', 32));
 };
 
 const relatedPersons: Promise<Person[]> = new Person().$relatedQuery('children');
@@ -307,6 +377,8 @@ const relatedMovies: Promise<Person[]> = new Movie().$relatedQuery('actors');
 class Animal extends objection.Model {
   // prettier-ignore
   species!: string;
+  name?: string;
+  owner?: Person;
 
   // Tests the ColumnNameMappers interface.
   static columnNameMappers = {
@@ -366,10 +438,7 @@ const appendRelatedPerson: Person = examplePerson.$appendRelated('pets', [
 ]);
 
 // static methods from Model should return the subclass type
-const personQB: objection.QueryBuilderYieldingOne<Person> = Person.loadRelated(
-  new Person(),
-  'movies'
-);
+const personQB: objection.QueryBuilder<Person, Person> = Person.loadRelated(new Person(), 'movies');
 const peopleQB: objection.QueryBuilder<Person> = Person.loadRelated([new Person()], 'movies');
 
 const person: Promise<Person> = personQB;
@@ -425,8 +494,7 @@ async () => {
 // (fewer characters than having each line `const qbNNN: QueryBuilder =`):
 
 const maybePerson: Promise<Person | undefined> = qb.findById(1);
-
-const maybePeople: Promise<Person[]> = qb.findByIds([1, 2, 3]);
+const maybePerson2: Promise<Person> = qb.findById([1, 2, 3]);
 
 // query builder knex-wrapping methods:
 
@@ -444,18 +512,41 @@ qb = qb.withSchema('schema_name');
 qb = qb.distinct('column1', 'column2', 'column3');
 qb = qb.join('tablename', 'column1', '=', 'column2');
 qb = qb.outerJoin('tablename', 'column1', '=', 'column2');
-qb = qb.joinRelation('table');
-qb = qb.joinRelation('table', { alias: false });
+qb = qb.joinRelated('table');
+qb = qb.joinRelated('table', { alias: false });
 qb = qb.where(raw('random()', 1, '2'));
+qb = qb.where(raw('random()', 1, '2'), '=', Person.knex().raw('foo'));
 qb = qb.where(Person.raw('random()', 1, '2', raw('3')));
+qb = qb.where(fn.coalesce(null, fn('random')), '=', 1);
+qb = qb.where(Person.ref('column1'), 1);
 qb = qb.alias('someAlias');
+qb = qb.with('alias', Movie.query());
+qb = qb.with('alias', qb => qb.from('someTable').select('id'));
+qb = qb.whereColumn('firstName', 'lastName');
+qb = qb.groupBy('firstName');
+qb = qb.groupBy(['firstName', 'lastName']);
+qb = qb.orderBy('firstName');
+qb = qb.whereComposite('id', 1);
+qb = qb.whereComposite('id', '>', 1);
+qb = qb.whereComposite(['id1', 'id2'], [1, '2']);
+qb = qb.whereComposite(['id1', 'id2'], Person.query());
+qb = qb.whereInComposite('id', [1, 2]);
+qb = qb.whereInComposite(
+  ['id1', 'id2'],
+  [
+    [1, '2'],
+    [1, '2']
+  ]
+);
+qb = qb.whereInComposite(['id1', 'id2'], Person.query().select('firstName', 'lastName'));
 
 // Query builder hooks. runBefore() and runAfter() don't immediately affect the result.
 
 const runBeforePerson: Promise<Person> = qb
   .first()
   .throwIfNotFound()
-  .runBefore(async (result: any, builder: objection.QueryBuilder<Person>) => 88);
+  .runBefore(async (result: any, builder: objection.QueryBuilder<Person, Person>) => 88);
+
 const runBeforePersons: Promise<Person[]> = qb.runBefore(
   async (result: any, builder: objection.QueryBuilder<Person>) => 88
 );
@@ -463,7 +554,8 @@ const runBeforePersons: Promise<Person[]> = qb.runBefore(
 const runAfterPerson: Promise<Person> = qb
   .first()
   .throwIfNotFound()
-  .runAfter(async (result: any, builder: objection.QueryBuilder<Person>) => 88);
+  .runAfter(async (result: any, builder: objection.QueryBuilder<Person, Person>) => 88);
+
 const runAfterPersons: Promise<Person[]> = qb.runAfter(
   async (result: any, builder: objection.QueryBuilder<Person>) => 88
 );
@@ -473,8 +565,62 @@ const runAfterPersons: Promise<Person[]> = qb.runAfter(
 const rowInserted: Promise<Person> = qb.insert({ firstName: 'bob' });
 const rowsInserted: Promise<Person[]> = qb.insert([{ firstName: 'alice' }, { firstName: 'bob' }]);
 const rowsInsertedWithRelated: Promise<Person> = qb.insertWithRelated({});
-const rowsInsertGraph1: Promise<Person> = qb.insertGraph({});
-const rowsInsertGraph2: Promise<Person> = qb.insertGraph({}, { relate: true });
+const rowsInsertGraph1: Promise<Person> = qb.insertGraph({
+  '#id': 'root',
+  firstName: 'Name',
+
+  mom: {
+    lastName: 'Hello'
+  },
+
+  movies: [
+    {
+      director: {
+        firstName: 'Hans'
+      }
+    },
+    {
+      '#dbRef': 1
+    }
+  ],
+
+  pets: [
+    {
+      name: 'Pet'
+    },
+    {
+      species: 'Doggo'
+    },
+    {
+      name: 'Catto',
+
+      owner: {
+        '#ref': 'root'
+      }
+    }
+  ]
+});
+const rowsInsertGraph2: Promise<Person[]> = qb.insertGraph([
+  {
+    '#id': 'person',
+    firstName: 'Name',
+
+    pets: [
+      {
+        '#id': 'pet',
+        name: 'Pet'
+      },
+      {
+        species: 'Doggo',
+
+        owner: {
+          '#ref': 'person'
+        }
+      }
+    ]
+  }
+]);
+const rowsInsertGraph3: Promise<Person> = qb.insertGraph({}, { relate: true });
 const rowsUpdated: Promise<number> = qb.update({});
 const rowsPatched: Promise<number> = qb.patch({});
 const rowsDeleted: Promise<number> = qb.delete();
@@ -553,9 +699,22 @@ const patchedModels: Promise<Person>[] = [
 
 const rowsEager: Promise<Person[]> = Person.query()
   .eagerAlgorithm(Person.NaiveEagerAlgorithm)
+  .eagerAlgorithm(Person.JoinEagerAlgorithm)
+  .eagerAlgorithm(Person.WhereInEagerAlgorithm)
+  .eagerOptions({ joinOperation: 'innerJoin' })
   .eager('foo.bar');
 
 const rowsEager2: Promise<Person[]> = Person.query().eager({
+  pets: {
+    owner: {
+      movies: {
+        director: true
+      }
+    }
+  }
+});
+
+const rowsEager3: Promise<Person[]> = Person.query().withGraphFetched({
   foo: {
     bar: true
   }
@@ -564,11 +723,27 @@ const rowsEager2: Promise<Person[]> = Person.query().eager({
 const children: Promise<Person[]> = Person.query()
   .skipUndefined()
   .allowEager('[pets, parent, children.[pets, movies.actors], movies.actors.pets]')
+  .allowEager({ pets: true })
+  .mergeAllowEager({ parent: true })
   .eager('children')
   .where('age', '>=', 42);
 
 const childrenAndPets: Promise<Person[]> = Person.query()
   .eager('children')
+  .where('age', '>=', 42)
+  .modifyEager('[pets, children.pets]', qb => qb.orderBy('name'))
+  .modifyEager('[pets, children.pets]', 'orderByName')
+  .modifyEager('[pets, children.pets]', ['orderByName', 'orderBySomethingElse']);
+
+const childrenAndPets2: Promise<Person[]> = Person.query()
+  .withGraphFetched('children')
+  .where('age', '>=', 42)
+  .modifyEager('[pets, children.pets]', qb => qb.orderBy('name'))
+  .modifyEager('[pets, children.pets]', 'orderByName')
+  .modifyEager('[pets, children.pets]', ['orderByName', 'orderBySomethingElse']);
+
+const childrenAndPets3: Promise<Person[]> = Person.query()
+  .withGraphJoined('children')
   .where('age', '>=', 42)
   .modifyEager('[pets, children.pets]', qb => qb.orderBy('name'))
   .modifyEager('[pets, children.pets]', 'orderByName')
@@ -615,7 +790,7 @@ const rowInsertReturning: Promise<Person | undefined> = Person.query()
   .returning('*');
 
 const rowsInsertReturning: Promise<Person[]> = Person.query()
-  .insert([{}])
+  .insert([{ firstName: 'Jack' }])
   .returning('*');
 
 // Executing a query builder should be equivalent to treating it
@@ -641,11 +816,16 @@ const pageQb = Person.query().page(1, 10);
 let pagePromise: Promise<objection.Page<Person>> = pageQb;
 pagePromise = pageQb.execute();
 
+Person.query()
+  .modify('someModifier')
+  .modify('someModifier', 1, 'foo', { bar: true })
+  .modify(['someModifier', 'someOtherModifier'])
+  .modify(qb => qb.where('firstName', 'lol'));
+
 // non-wrapped methods:
 
-const modelFromQuery: typeof objection.Model = qb.modelClass();
-
-const sql: string = qb.toSql();
+const modelFromQuery = qb.modelClass();
+const knexQuery = qb.toKnexQuery().toSQL();
 const tableName: string = qb.tableNameFor(Person);
 const tableRef: string = qb.tableRefFor(Person);
 
@@ -661,9 +841,13 @@ qb = qb.context({
   onBuild: qbcb
 });
 
+const trx: objection.Transaction = qb.context().transaction;
+
 qb = qb.mergeContext({
   foo: 'bar'
 });
+
+qb = qb.clearContext();
 
 qb = qb.runBefore(qbcb);
 qb = qb.onBuild(qbcb);
@@ -676,7 +860,17 @@ qb = qb.onBuildKnex((knexBuilder: knex.QueryBuilder, builder: objection.QueryBui
 qb = qb.reject('fail');
 qb = qb.resolve('success');
 
-objection.transaction(Person, TxPerson => {
+const trxRes1: Promise<Person> = Person.transaction(async trx => {
+  const person = await Person.query(trx).findById(1);
+  return person;
+});
+
+const trxRes2: Promise<Person[]> = Person.transaction(Person.knex(), async trx => {
+  const person = await Person.query(trx).findById(1);
+  return [person];
+});
+
+const trxRes3: Promise<string> = objection.transaction(Person, TxPerson => {
   const n: number = new TxPerson().examplePersonMethod('hello');
   return Promise.resolve('yay');
 });
@@ -731,27 +925,14 @@ objection.transaction.start(Person).then(trx => {
 
 const p: Promise<string> = qb.then(() => 'done');
 
-// Verify that we can insert a partial model and relate a partial movie
-Person.query()
-  .insertAndFetch({ firstName: 'Jim' })
-  .then((ea: Person) => {
-    console.log(`Inserted ${p}`);
-    ea.$loadRelated('movies')
-      .relate<Movie>({ title: 'Total Recall' })
-      .then((pWithMovie: Person) => {
-        console.log(`Related ${pWithMovie}`);
-      });
-  });
-
 // Verify we can call `.insert` with a Partial<Person>:
 
 Person.query().insert({ firstName: 'Chuck' });
 
 // Verify we can call `.insert` via $relatedQuery
-// (albeit with a cast to Movie):
 
 async () => {
-  const m = await new Person().$relatedQuery<Movie>('movies').insert({ title: 'Total Recall' });
+  const m = await new Person().$relatedQuery('movies').insert({ title: 'Total Recall' });
   takesModel(m);
   takesMovie(m);
 };
@@ -798,6 +979,33 @@ Person.query().select(
 Person.query().where(builder => {
   builder.whereBetween('age', [30, 40]).orWhereIn('lastName', whereSubQuery);
 });
+
+const relQueryResult1: Promise<Animal[]> = Person.relatedQuery('pets').for(1);
+const relQueryResult2: Promise<Animal[]> = Person.relatedQuery('pets').for([1, 2]);
+const relQueryResult3: Promise<Animal[]> = Person.relatedQuery('pets').for('something');
+const relQueryResult4: Promise<Animal[]> = Person.relatedQuery('pets').for(['something', 'eles']);
+const relQueryResult5: Promise<Animal[]> = Person.relatedQuery('pets').for([
+  [1, 2],
+  [3, 4]
+]);
+const relQueryResult6: Promise<Animal[]> = Person.relatedQuery('pets').for(
+  Movie.query().select('id')
+);
+const relQueryResult7: Promise<Movie[]> = Person.relatedQuery('movies').for(1);
+const relQueryResult8: Promise<Person[]> = Person.relatedQuery('mom').for(1);
+const relQueryResult9: Promise<Person[]> = Person.relatedQuery('children').for(1);
+const relQueryResult10: Promise<Movie[]> = Person.relatedQuery<Movie>('nonExistentRelation').for(1);
+
+/**
+ * http://knexjs.org/#Builder-count
+ */
+Person.query().count('active', { as: 'a' });
+Person.query().count('active as a');
+Person.query().count({ a: 'active' });
+Person.query().count({ a: 'active', v: 'valid' });
+Person.query().count('id', 'active');
+Person.query().count({ count: ['id', 'active'] });
+Person.query().count(raw('??', ['active']));
 
 // RawBuilder:
 
@@ -910,6 +1118,11 @@ const deleteByIDThrow: Promise<number> = qb.deleteById(32).throwIfNotFound();
 
 const whereFirst: Promise<Person | undefined> = qb.where({ firstName: 'Mo' }).first();
 const firstWhere: Promise<Person | undefined> = qb.first().where({ firstName: 'Mo' });
+const updateFirst: Promise<number> = qb.update({}).first();
+const updateReturningFirst: Promise<Person> = qb
+  .update({})
+  .returning('*')
+  .first();
 
 // Returning restores the result to Model or Model[].
 
@@ -941,6 +1154,9 @@ const orderByColumns: Promise<Person[]> = qb.orderBy([
   { column: 'firstName', order: 'asc' },
   { column: 'lastName' }
 ]);
+
+const someModel1: typeof objection.Model = Person.getRelations()['pets'].joinModelClass;
+const someModel2: typeof objection.Model = Person.getRelation('pets').ownerModelClass;
 
 // Verify that Model.query() and model.$query() return the same type of query builder.
 // Confirming this prevent us from having to duplicate the tests for each.
@@ -976,6 +1192,17 @@ takesPerson(Person.fromDatabaseJson({ firstName: 'jennifer', lastName: 'Lawrence
 const plugin1 = ({} as any) as objection.Plugin;
 const plugin2 = ({} as any) as objection.Plugin;
 
+// DB errors
+() => {
+  const e = new DBError('message');
+
+  if (e instanceof DBError) {
+  }
+
+  if (e instanceof objection.ConstraintViolationError) {
+  }
+};
+
 () => {
   const BaseModel = objection.mixin(objection.Model, [plugin1, plugin2]);
   takesModelClass(BaseModel);
@@ -1006,10 +1233,7 @@ const plugin2 = ({} as any) as objection.Plugin;
 };
 
 () => {
-  const plugin = objection.compose(
-    plugin1,
-    plugin2
-  );
+  const plugin = objection.compose(plugin1, plugin2);
   const BaseModel = objection.mixin(objection.Model, plugin);
   takesModelClass(BaseModel);
   takesModelSubclass(new BaseModel());
@@ -1055,10 +1279,18 @@ async () => {
     .whereNotNull('interviewDate');
 
   // findByIds with sets of composite key
-  const interviews: Interview[] = await Interview.query().findByIds([[10, 11], [11, 12], [12, 13]]);
+  const interviews: Interview[] = await Interview.query().findByIds([
+    [10, 11],
+    [11, 12],
+    [12, 13]
+  ]);
 
   // findByIds with sets of composite key, chained with other query builder methods
   const interviewsWithAssignedDate: Interview[] = await Interview.query()
-    .findByIds([[10, 11], [11, 12], [12, 13]])
+    .findByIds([
+      [10, 11],
+      [11, 12],
+      [12, 13]
+    ])
     .whereNotNull('interviewDate');
 };

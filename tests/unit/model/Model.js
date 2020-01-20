@@ -1,7 +1,6 @@
 const _ = require('lodash');
-const knex = require('knex');
 const expect = require('expect.js');
-const { Model, QueryBuilder, ValidationError } = require('../../../');
+const { Model, QueryBuilder, ValidationError, raw, fn } = require('../../../');
 
 describe('Model', () => {
   describe('fromJson', () => {
@@ -668,7 +667,10 @@ describe('Model', () => {
       let model = Model1.fromJson({
         id: 10,
         model1Id: 13,
-        relation1: [{ id: 11, model1Id: 10 }, { id: 12, model1Id: 10 }],
+        relation1: [
+          { id: 11, model1Id: 10 },
+          { id: 12, model1Id: 10 }
+        ],
         relation2: { id: 13, model1Id: null }
       });
 
@@ -713,7 +715,10 @@ describe('Model', () => {
         id: 10,
         model1Id: 13
       });
-      model.relation1 = [{ id: 11, model1Id: 10 }, { id: 12, model1Id: 10 }];
+      model.relation1 = [
+        { id: 11, model1Id: 10 },
+        { id: 12, model1Id: 10 }
+      ];
       model.relation2 = { id: 13, model1Id: null };
 
       let modelWithRelationships = Model1.fromJson(model);
@@ -749,7 +754,10 @@ describe('Model', () => {
         {
           id: 10,
           model1Id: 13,
-          relation1: [{ id: 11, model1Id: 10 }, { id: 12, model1Id: 10 }],
+          relation1: [
+            { id: 11, model1Id: 10 },
+            { id: 12, model1Id: 10 }
+          ],
           relation2: { id: 13, model1Id: null }
         },
         { skipParseRelations: true }
@@ -1284,7 +1292,10 @@ describe('Model', () => {
           foo: 112
         },
 
-        rel2: [{ a: 102, b: 12, foo: 114 }, { a: 103, b: 13, foo: 116 }]
+        rel2: [
+          { a: 102, b: 12, foo: 114 },
+          { a: 103, b: 13, foo: 116 }
+        ]
       });
     });
 
@@ -1319,7 +1330,10 @@ describe('Model', () => {
           b: 11
         },
 
-        rel2: [{ a: 102, b: 12 }, { a: 103, b: 13 }]
+        rel2: [
+          { a: 102, b: 12 },
+          { a: 103, b: 13 }
+        ]
       });
     });
 
@@ -1354,7 +1368,10 @@ describe('Model', () => {
           b: 11
         },
 
-        rel2: [{ a: 102, b: 12 }, { a: 103, b: 13 }]
+        rel2: [
+          { a: 102, b: 12 },
+          { a: 103, b: 13 }
+        ]
       });
     });
 
@@ -1393,7 +1410,10 @@ describe('Model', () => {
           bar: 1111
         },
 
-        rel2: [{ a: 102, b: 12, foo: 114, bar: 1224 }, { a: 103, b: 13, foo: 116, bar: 1339 }]
+        rel2: [
+          { a: 102, b: 12, foo: 114, bar: 1224 },
+          { a: 103, b: 13, foo: 116, bar: 1339 }
+        ]
       });
     });
 
@@ -2079,12 +2099,8 @@ describe('Model', () => {
     expect(model.toJSON({ shallow: true })).to.eql({ a: 1, b: 2 });
   });
 
-  it('raw method should be a shortcut to knex().raw', () => {
-    let Model = modelClass('Model');
-    Model.knex(knex({ client: 'pg' }));
-
-    let sql = Model.raw('SELECT * FROM "Model" where "id" = ?', [10]).toString();
-    expect(sql).to.eql('SELECT * FROM "Model" where "id" = 10');
+  it('Model.raw should return objection.raw', () => {
+    expect(modelClass('Model').raw).to.equal(raw);
   });
 
   it('ensureModel should return null for null input', () => {
@@ -2180,11 +2196,17 @@ describe('Model', () => {
       model = Model1.fromJson({
         id: 1,
         model1Id: 2,
-        relation1: [{ id: 4, model1Id: 1 }, { id: 5, model1Id: 1 }],
+        relation1: [
+          { id: 4, model1Id: 1 },
+          { id: 5, model1Id: 1 }
+        ],
         relation2: {
           id: 2,
           model1Id: 3,
-          relation1: [{ id: 6, model1Id: 2 }, { id: 7, model1Id: 2 }],
+          relation1: [
+            { id: 6, model1Id: 2 },
+            { id: 7, model1Id: 2 }
+          ],
           relation2: {
             id: 3,
             model1Id: null,
@@ -2388,11 +2410,17 @@ describe('Model', () => {
       model = Model1.fromJson({
         id: 1,
         model1Id: 2,
-        relation1: [{ id: 4, model1Id: 1 }, { id: 5, model1Id: 1 }],
+        relation1: [
+          { id: 4, model1Id: 1 },
+          { id: 5, model1Id: 1 }
+        ],
         relation2: {
           id: 2,
           model1Id: 3,
-          relation1: [{ id: 6, model1Id: 2 }, { id: 7, model1Id: 2 }],
+          relation1: [
+            { id: 6, model1Id: 2 },
+            { id: 7, model1Id: 2 }
+          ],
           relation2: {
             id: 3,
             model1Id: null,
@@ -2583,24 +2611,8 @@ describe('Model', () => {
     expect(model.$toJson().foo).to.equal('10');
   });
 
-  it('fn() should be a shortcut to knex.fn', () => {
-    let Model1 = modelClass('Model1');
-    Model1.knex({ fn: { a: 1 } });
-    expect(Model1.fn()).to.eql({ a: 1 });
-  });
-
-  it('fn should be a shortcut to knex.fn', () => {
-    const Model1 = modelClass('Model1');
-    Model1.knex({ fn: { a: 1 } });
-    expect(Model1.fn.a).to.equal(1);
-
-    const Model2 = modelClass('Model2');
-    Model2.knex(knex({ client: 'pg' }));
-
-    const expected = Model2.knex()
-      .fn.now()
-      .toString();
-    expect(Model2.fn.now().toString()).to.equal(expected);
+  it('Model.fn should return objection.fn', () => {
+    expect(modelClass('Model1').fn).to.equal(fn);
   });
 
   it('make sure JSON.stringify works with toJSON (#869)', () => {

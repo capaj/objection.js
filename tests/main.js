@@ -37,11 +37,10 @@ describe('main module', () => {
     expect(objection.transaction.start).to.equal(require('../lib/transaction').transaction.start);
     expect(objection.ref).to.equal(require('../lib/queryBuilder/ReferenceBuilder').ref);
     expect(objection.raw).to.equal(require('../lib/queryBuilder/RawBuilder').raw);
-    expect(objection.lit).to.equal(require('../lib/queryBuilder/LiteralBuilder').lit);
-    expect(objection.Promise).to.equal(require('bluebird'));
+    expect(objection.lit).to.equal(require('../lib/queryBuilder/ValueBuilder').val);
+    expect(objection.val).to.equal(require('../lib/queryBuilder/ValueBuilder').val);
     expect(objection.mixin).to.equal(require('../lib/utils/mixin').mixin);
     expect(objection.compose).to.equal(require('../lib/utils/mixin').compose);
-    expect(objection.lodash).to.equal(require('lodash'));
     expect(Object.getPrototypeOf(objection.Validator)).to.equal(
       require('../lib/model/Validator').Validator
     );
@@ -52,5 +51,15 @@ describe('main module', () => {
     expect(Object.getPrototypeOf(objection.QueryBuilder)).to.equal(
       require('../lib/queryBuilder/QueryBuilder').QueryBuilder
     );
+    expect(objection.DBError).to.equal(require('db-errors').DBError);
+    expect(objection.UniqueViolationError).to.equal(require('db-errors').UniqueViolationError);
+    expect(objection.ConstraintViolationError).to.equal(
+      require('db-errors').ConstraintViolationError
+    );
+    expect(objection.ForeignKeyViolationError).to.equal(
+      require('db-errors').ForeignKeyViolationError
+    );
+    expect(objection.NotNullViolationError).to.equal(require('db-errors').NotNullViolationError);
+    expect(objection.DataError).to.equal(require('db-errors').DataError);
   });
 });

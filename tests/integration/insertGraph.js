@@ -84,9 +84,53 @@ module.exports = session => {
         return Model1.query().insertGraph([]);
       });
 
+      it('should throw if #ref is used without the `allowRefs` option', done => {
+        Model1.query()
+          .insertGraph({
+            '#id': 'id1',
+
+            model1Relation2: [
+              {
+                '#ref': 'id1'
+              }
+            ]
+          })
+          .then(() => {
+            done(new Error('should not get here'));
+          })
+          .catch(err => {
+            expect(err.message).to.equal(
+              '#ref references are not allowed in a graph by default. see the allowRefs insert/upsert graph option'
+            );
+            done();
+          });
+      });
+
+      it('should throw if #ref{} is used without the `allowRefs` option', done => {
+        Model1.query()
+          .insertGraph({
+            '#id': 'id1',
+
+            model1Relation2: [
+              {
+                model1Prop1: '#ref{id1.id}'
+              }
+            ]
+          })
+          .then(() => {
+            done(new Error('should not get here'));
+          })
+          .catch(err => {
+            expect(err.message).to.equal(
+              '#ref references are not allowed in a graph by default. see the allowRefs insert/upsert graph option'
+            );
+            done();
+          });
+      });
+
       it('should insert a model with relations', () => {
         return Model1.query()
-          .insertGraph(insertion)
+          .insertGraph(insertion, { allowRefs: true })
           .then(inserted => {
             return check(inserted, true).return(inserted);
           })
@@ -104,7 +148,7 @@ module.exports = session => {
 
       it('should have alias `insertWithRelated`', () => {
         return Model1.query()
-          .insertWithRelated(insertion)
+          .insertWithRelated(insertion, { allowRefs: true })
           .then(inserted => {
             return check(inserted, true).return(inserted);
           })
@@ -152,7 +196,7 @@ module.exports = session => {
 
         it('should insert a model with relations', () => {
           return Model1.query()
-            .insertGraph(insertion)
+            .insertGraph(insertion, { allowRefs: true })
             .then(inserted => {
               return check(inserted, true).return(inserted);
             })
@@ -203,7 +247,10 @@ module.exports = session => {
 
             expect(inserted.toJSON()).to.eql({
               id: 4,
-              model1Relation2: [{ model1Id: 4, idCol: 100 }, { model1Id: 4, idCol: 101 }]
+              model1Relation2: [
+                { model1Id: 4, idCol: 100 },
+                { model1Id: 4, idCol: 101 }
+              ]
             });
 
             return Model1.query()
@@ -218,21 +265,21 @@ module.exports = session => {
               model1Id: null,
               model1Prop1: '42',
               model1Prop2: null,
-              $afterGetCalled: 1,
+              $afterFindCalled: 1,
               model1Relation2: [
                 {
                   idCol: 100,
                   model1Id: 4,
                   model2Prop1: '10',
                   model2Prop2: null,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 },
                 {
                   idCol: 101,
                   model1Id: 4,
                   model2Prop1: '50',
                   model2Prop2: null,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 }
               ]
             });
@@ -273,7 +320,7 @@ module.exports = session => {
             expect(Model1.getJsonSchema()).to.equal(Model1.jsonSchema);
             expect(Model2.getJsonSchema()).to.equal(Model2.jsonSchema);
 
-            return Model1.query().insertGraph(graph);
+            return Model1.query().insertGraph(graph, { allowRefs: true });
           })
             .then(() => {
               done(new Error('should not get here'));
@@ -284,7 +331,7 @@ module.exports = session => {
 
               return Promise.all([session.knex('Model1'), session.knex('model2')]);
             })
-            .spread((rows1, rows2) => {
+            .then(([rows1, rows2]) => {
               expect(rows1).to.have.length(1);
               expect(rows2).to.have.length(1);
               done();
@@ -346,7 +393,7 @@ module.exports = session => {
           expect(Model2.getJsonSchema()).to.equal(Model2.jsonSchema);
 
           return Model1.query()
-            .insertGraph(insertion)
+            .insertGraph(insertion, { allowRefs: true })
             .then(inserted => {
               return check(inserted, true).return(inserted);
             })
@@ -391,7 +438,7 @@ module.exports = session => {
               model1Id: null,
               model2Prop1: 'foo',
               model2Prop2: null,
-              $afterGetCalled: 1,
+              $afterFindCalled: 1,
 
               model2Relation1: [
                 {
@@ -400,7 +447,7 @@ module.exports = session => {
                   model1Prop1: population.model1Prop1,
                   model1Prop2: null,
                   aliasedExtra: null,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 }
               ]
             });
@@ -485,21 +532,21 @@ module.exports = session => {
               model1Id: 500,
               model1Prop1: 'hello',
               model1Prop2: null,
-              $afterGetCalled: 1,
+              $afterFindCalled: 1,
 
               model1Relation1: {
                 id: 500,
                 model1Prop1: 'howdy',
                 model1Id: null,
                 model1Prop2: null,
-                $afterGetCalled: 1
+                $afterFindCalled: 1
               },
 
               model1Relation2: [
                 {
                   model2Prop1: 'world',
                   model2Prop2: null,
-                  $afterGetCalled: 1,
+                  $afterFindCalled: 1,
 
                   model2Relation1: [
                     {
@@ -508,7 +555,7 @@ module.exports = session => {
                       model1Prop1: population.model1Prop1,
                       model1Prop2: null,
                       aliasedExtra: null,
-                      $afterGetCalled: 1
+                      $afterFindCalled: 1
                     }
                   ]
                 }
@@ -522,7 +569,7 @@ module.exports = session => {
                   model2Prop2: null,
                   extra1: null,
                   extra2: null,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 }
               ]
             });
@@ -532,7 +579,7 @@ module.exports = session => {
       if (utils.isPostgres(session.knex)) {
         it('query building methods should be applied to the root models', () => {
           return Model1.query()
-            .insertGraph(insertion)
+            .insertGraph(insertion, { allowRefs: true })
             .returning('*')
             .then(inserted => {
               return check(inserted, true).return(inserted);
@@ -562,7 +609,7 @@ module.exports = session => {
 
       it('should insert a model with relations and fetch the inserted graph', () => {
         return Model1.query()
-          .insertGraphAndFetch(insertion)
+          .insertGraphAndFetch(insertion, { allowRefs: true })
           .then(inserted => {
             return check(inserted).return(inserted);
           })
@@ -605,7 +652,7 @@ module.exports = session => {
               model1Id: null,
               model2Prop1: 'foo',
               model2Prop2: null,
-              $afterGetCalled: 1,
+              $afterFindCalled: 1,
 
               model2Relation1: [
                 {
@@ -614,7 +661,7 @@ module.exports = session => {
                   model1Prop1: population.model1Prop1,
                   model1Prop2: null,
                   aliasedExtra: null,
-                  $afterGetCalled: 1
+                  $afterFindCalled: 1
                 }
               ]
             });
@@ -622,14 +669,14 @@ module.exports = session => {
       });
     });
 
-    describe('.query().insertGraph().allowRelated()', () => {
+    describe('.query().insertGraph().allowInsert()', () => {
       beforeEach(() => {
         return session.populate(population);
       });
 
       it('should allow insert when the allowed relation expression is a superset', () => {
         return Model1.query()
-          .insertGraph(insertion)
+          .insertGraph(insertion, { allowRefs: true })
           .allowInsert(eagerExpr)
           .then(inserted => {
             return check(inserted, true).return(inserted);
@@ -661,7 +708,7 @@ module.exports = session => {
       it('should insert a model with relations', () => {
         return Model1.fromJson(insertion)
           .$query()
-          .insertGraph()
+          .insertGraph(undefined, { allowRefs: true })
           .then(inserted => {
             return check(inserted, true).return(inserted);
           })
@@ -704,7 +751,7 @@ module.exports = session => {
         it('should insert a model with relations', () => {
           return parent
             .$relatedQuery('model1Relation2')
-            .insertGraph(insertion)
+            .insertGraph(insertion, { allowRefs: true })
             .then(inserted => {
               return check(inserted.model2Relation1[0], true);
             })
@@ -750,7 +797,7 @@ module.exports = session => {
         it('should insert a model with relations', () => {
           return parent
             .$relatedQuery('model1Relation3')
-            .insertGraph(insertion)
+            .insertGraph(insertion, { allowRefs: true })
             .then(inserted => {
               return check(inserted.model2Relation1[0], true);
             })

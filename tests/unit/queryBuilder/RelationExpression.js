@@ -882,6 +882,56 @@ describe('RelationExpression', () => {
       // testParseFail('[a.b, a.c]');
       // testParseFail('a.[b.c, b.d]');
     });
+
+    it('should accept single function or modifier name in $modifiers', () => {
+      const modifier = () => {};
+
+      testParse(
+        {
+          a: {
+            $modify: modifier
+          }
+        },
+        {
+          $name: null,
+          $relation: null,
+          $modify: [],
+          $recursive: false,
+          $allRecursive: false,
+
+          a: {
+            $name: 'a',
+            $relation: 'a',
+            $modify: [modifier],
+            $recursive: false,
+            $allRecursive: false
+          }
+        }
+      );
+
+      testParse(
+        {
+          a: {
+            $modify: 'someModifier'
+          }
+        },
+        {
+          $name: null,
+          $relation: null,
+          $modify: [],
+          $recursive: false,
+          $allRecursive: false,
+
+          a: {
+            $name: 'a',
+            $relation: 'a',
+            $modify: ['someModifier'],
+            $recursive: false,
+            $allRecursive: false
+          }
+        }
+      );
+    });
   });
 
   it('clone', () => {
@@ -1309,7 +1359,10 @@ describe('RelationExpression', () => {
         });
       });
 
-      expect(items).to.eql([{ exprName: 'a', relation: 'aa' }, { exprName: 'a', relation: 'aa' }]);
+      expect(items).to.eql([
+        { exprName: 'a', relation: 'aa' },
+        { exprName: 'a', relation: 'aa' }
+      ]);
     });
 
     it('should work with all recursive expressions', () => {

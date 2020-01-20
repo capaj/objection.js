@@ -45,9 +45,13 @@ module.exports = session => {
     });
 
     it('should fail if one of the model classes is not a subclass of Model', done => {
-      transaction(Model1, function() {}, () => {
-        return { a: 1 };
-      })
+      transaction(
+        Model1,
+        function() {},
+        () => {
+          return { a: 1 };
+        }
+      )
         .then(() => {
           done(new Error('should not get here'));
         })
@@ -94,6 +98,42 @@ module.exports = session => {
           done();
         })
         .catch(done);
+    });
+
+    it('should commit transaction if no errors occur (Model.transaction)', async () => {
+      const result = await Model1.transaction(async trx => {
+        await Model1.query(trx).insert({ model1Prop1: 'test 1' });
+        await Model1.query(trx).insert({ model1Prop1: 'test 2' });
+        return Model2.query(trx).insert({ model2Prop1: 'test 3' });
+      });
+
+      expect(result.model2Prop1).to.equal('test 3');
+      let rows = await session.knex('Model1');
+
+      expect(rows).to.have.length(2);
+      expect(_.map(rows, 'model1Prop1').sort()).to.eql(['test 1', 'test 2']);
+      rows = await session.knex('model2');
+
+      expect(rows).to.have.length(1);
+      expect(rows[0].model2_prop1).to.equal('test 3');
+    });
+
+    it('should commit transaction if no errors occur (Model.transaction with two args)', async () => {
+      const result = await Model1.transaction(Model1.knex(), async trx => {
+        await Model1.query(trx).insert({ model1Prop1: 'test 1' });
+        await Model1.query(trx).insert({ model1Prop1: 'test 2' });
+        return Model2.query(trx).insert({ model2Prop1: 'test 3' });
+      });
+
+      expect(result.model2Prop1).to.equal('test 3');
+      let rows = await session.knex('Model1');
+
+      expect(rows).to.have.length(2);
+      expect(_.map(rows, 'model1Prop1').sort()).to.eql(['test 1', 'test 2']);
+      rows = await session.knex('model2');
+
+      expect(rows).to.have.length(1);
+      expect(rows[0].model2_prop1).to.equal('test 3');
     });
 
     it('should commit transaction if no errors occur (2)', done => {
@@ -204,6 +244,28 @@ module.exports = session => {
         .catch(done);
     });
 
+    it('should rollback if an error occurs (Model.transaction)', async () => {
+      try {
+        await Model1.transaction(async trx => {
+          await Model1.query(trx).insert({ model1Prop1: 'test 1' });
+          await Model1.query(trx).insert({ model1Prop1: 'test 2' });
+          await Model2.query(trx).insert({ model2Prop1: 'test 3' });
+
+          throw new Error('whoops');
+        });
+
+        throw new Error('should not get here');
+      } catch (err) {
+        expect(err.message).to.equal('whoops');
+
+        let rows = await session.knex('Model1');
+        expect(rows).to.have.length(0);
+
+        rows = await session.knex('model2');
+        expect(rows).to.have.length(0);
+      }
+    });
+
     it('should rollback if an error occurs (2)', done => {
       transaction(Model1, Model1 => {
         return Model1.query()
@@ -258,9 +320,13 @@ module.exports = session => {
         .catch(err => {
           expect(err.message).to.equal('whoops');
 
-          return [session.knex('Model1'), session.knex('model2'), session.knex('Model1Model2')];
+          return Promise.all([
+            session.knex('Model1'),
+            session.knex('model2'),
+            session.knex('Model1Model2')
+          ]);
         })
-        .spread((rows1, rows2, rows3) => {
+        .then(([rows1, rows2, rows3]) => {
           expect(rows1).to.have.length(0);
           expect(rows2).to.have.length(0);
           expect(rows3).to.have.length(0);
@@ -295,21 +361,21 @@ module.exports = session => {
               return models[0]
                 .$relatedQuery('model1Relation2', trx)
                 .insert({ model2Prop1: 'e' })
-                .return(models);
+                .then(() => models);
             })
             .then(models => {
               return models[0]
                 .$relatedQuery('model1Relation2')
                 .transacting(trx)
                 .insert({ model2Prop1: 'f' })
-                .return(models);
+                .then(() => models);
             })
             .then(models => {
               return Model1.query(trx)
                 .findById(models[0].id)
                 .then(it => it.$loadRelated('model1Relation1', null, trx))
                 .then(it => expect(it.model1Relation1.model1Prop1).to.equal('b'))
-                .return(models);
+                .then(() => models);
             })
             .then(models => {
               expect(models[0].$query(trx).knex() === trx);
@@ -357,21 +423,21 @@ module.exports = session => {
             return models[0]
               .$relatedQuery('model1Relation2', trx)
               .insert({ model2Prop1: 'e' })
-              .return(models);
+              .then(() => models);
           })
           .then(models => {
             return models[0]
               .$relatedQuery('model1Relation2')
               .transacting(trx)
               .insert({ model2Prop1: 'f' })
-              .return(models);
+              .then(() => models);
           })
           .then(models => {
             return Model1.query(trx)
               .findById(models[0].id)
               .then(it => it.$loadRelated('model1Relation1', null, trx))
               .then(it => expect(it.model1Relation1.model1Prop1).to.equal('b'))
-              .return(models);
+              .then(() => models);
           })
           .then(models => {
             expect(models[0].$query(trx).knex() === trx);
@@ -419,14 +485,14 @@ module.exports = session => {
             return models[0]
               .$relatedQuery('model1Relation2', trx)
               .insert({ model2Prop1: 'e' })
-              .return(models);
+              .then(() => models);
           })
           .then(models => {
             return models[0]
               .$relatedQuery('model1Relation2')
               .transacting(trx)
               .insert({ model2Prop1: 'f' })
-              .return(models);
+              .then(() => models);
           })
           .then(models => {
             expect(models[0].$query(trx).knex() === trx);
@@ -566,11 +632,51 @@ module.exports = session => {
         .catch(done);
     });
 
-    describe('transaction.start()', () => {
+    describe('transaction.start() / Model.startTransaction()', () => {
       it('should commit transaction when the commit method is called', done => {
         let trx;
+
         transaction
           .start(Model1)
+          .then(trans => {
+            trx = trans;
+            return Model1.bindKnex(trx)
+              .query()
+              .insert({ model1Prop1: 'test 1' });
+          })
+          .then(() => {
+            return Model1.bindKnex(trx)
+              .query()
+              .insert({ model1Prop1: 'test 2' });
+          })
+          .then(() => {
+            return Model2.bindKnex(trx)
+              .query()
+              .insert({ model2Prop1: 'test 3' });
+          })
+          .then(() => {
+            return trx.commit();
+          })
+          .then(() => {
+            return session.knex('Model1');
+          })
+          .then(rows => {
+            expect(rows).to.have.length(2);
+            expect(_.map(rows, 'model1Prop1').sort()).to.eql(['test 1', 'test 2']);
+            return session.knex('model2');
+          })
+          .then(rows => {
+            expect(rows).to.have.length(1);
+            expect(rows[0].model2_prop1).to.equal('test 3');
+            done();
+          })
+          .catch(done);
+      });
+
+      it('should commit transaction when the commit method is called (Model.startTransaction())', done => {
+        let trx;
+
+        Model1.startTransaction()
           .then(trans => {
             trx = trans;
             return Model1.bindKnex(trx)
@@ -610,6 +716,27 @@ module.exports = session => {
         'commit should work with yield (and thus async/await)',
         Promise.coroutine(function*() {
           const trx = yield transaction.start(Model1.knex());
+
+          yield Model1.query(trx).insert({ model1Prop1: 'test 1' });
+          yield Model1.query(trx).insert({ model1Prop1: 'test 2' });
+          yield Model2.query(trx).insert({ model2Prop1: 'test 3' });
+          yield trx.commit();
+
+          const model1Rows = yield session.knex('Model1');
+          const model2Rows = yield session.knex('model2');
+
+          expect(model1Rows).to.have.length(2);
+          expect(_.map(model1Rows, 'model1Prop1').sort()).to.eql(['test 1', 'test 2']);
+
+          expect(model2Rows).to.have.length(1);
+          expect(model2Rows[0].model2_prop1).to.equal('test 3');
+        })
+      );
+
+      it(
+        'commit should work with yield (and thus async/await) (Model.startTransaction())',
+        Promise.coroutine(function*() {
+          const trx = yield Model1.startTransaction();
 
           yield Model1.query(trx).insert({ model1Prop1: 'test 1' });
           yield Model1.query(trx).insert({ model1Prop1: 'test 2' });
@@ -733,42 +860,7 @@ module.exports = session => {
       });
     });
 
-    describe('model.$transaction() and model.$knex()', () => {
-      it("model.$transaction() methods should return the model's transaction", done => {
-        transaction
-          .start(Model1)
-          .then(trx => {
-            return Model1.bindTransaction(trx)
-              .query()
-              .insert({ model1Prop1: 'test 1' });
-          })
-          .then(model => {
-            return Model1.bindTransaction(model.$transaction())
-              .query()
-              .insert({ model1Prop1: 'test 2' });
-          })
-          .then(model => {
-            return Model2.bindTransaction(model.$transaction())
-              .query()
-              .insert({ model2Prop1: 'test 3' });
-          })
-          .then(model => {
-            return model.$transaction().rollback();
-          })
-          .then(() => {
-            return session.knex('Model1');
-          })
-          .then(rows => {
-            expect(rows).to.have.length(0);
-            return session.knex('model2');
-          })
-          .then(rows => {
-            expect(rows).to.have.length(0);
-            done();
-          })
-          .catch(done);
-      });
-
+    describe('model.$knex()', () => {
       it("model.$knex() methods should return the model's transaction", done => {
         transaction
           .start(Model1)

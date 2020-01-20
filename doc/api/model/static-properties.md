@@ -16,9 +16,11 @@ Each model must set this.
 
 ## `static` relationMappings
 
-This property defines the relations to other models.
+This property defines the relations (relationships, associations) to other models.
 
-relationMappings is an object (or a function that returns an object) whose keys are relation names and values are [RelationMapping](/api/types/#type-relationmapping) instances. The `join` property in addition to the relation type define how the models are related to one another. The `from` and `to` properties of the `join` object define the database columns through which the models are associated. Note that neither of these columns need to be primary keys. They can be any columns. In fact they can even be fields inside JSON columns (using the [ref](/api/objection/#ref) helper). In the case of ManyToManyRelation also the join table needs to be defined. This is done using the `through` object.
+`relationMappings` is an object (or a function/getter that returns an object) whose keys are relation names and values are [RelationMapping](/api/types/#type-relationmapping) instances. The `join` property in addition to the relation type define how the models are related to one another.
+
+The `from` and `to` properties of the `join` object define the database columns through which the models are associated. Note that neither of these columns need to be primary keys. They can be any columns. In fact they can even be fields inside JSON columns (using the [ref](/api/objection/#ref) helper). In the case of ManyToManyRelation also the join table needs to be defined. This is done using the `through` object.
 
 The `modelClass` passed to the relation mappings is the class of the related model. It can be one of the following:
 
@@ -29,8 +31,9 @@ The `modelClass` passed to the relation mappings is the class of the related mod
 The file path versions are handy for avoiding require loops.
 
 Further reading:
- * [the relation guide](/guide/relations.html)
- * [RelationMapping](/api/types/#type-relationmapping)
+
+- [the relation guide](/guide/relations.html)
+- [RelationMapping](/api/types/#type-relationmapping)
 
 ##### Examples
 
@@ -49,12 +52,15 @@ class Person extends Model {
         modelClass: Animal,
         join: {
           from: 'persons.id',
+          to: 'animals.ownerId'
+
           // Any of the `to` and `from` fields can also be
           // references to nested fields (or arrays of references).
           // Here the relation is created between `persons.id` and
           // `animals.json.details.ownerId` properties. The reference
           // must be cast to the same type as the other key.
-          to: ref('animals.json:details.ownerId').castInt()
+          //
+          // to: ref('animals.json:details.ownerId').castInt()
         }
       },
 
@@ -84,7 +90,7 @@ class Person extends Model {
             // Columns listed here are automatically joined
             // to the related models on read and written to
             // the join table instead of the related table
-            // on insert.
+            // on insert/update.
             //
             // extra: ['someExtra']
           },
@@ -121,9 +127,9 @@ class Person extends Model {
       type: 'object',
       required: ['name'],
       properties: {
-        id: {type: 'integer'},
-        name: {type: 'string', minLength: 1, maxLength: 255},
-        age: {type: 'number'}, // optional
+        id: { type: 'integer' },
+        name: { type: 'string', minLength: 1, maxLength: 255 },
+        age: { type: 'number' } // optional
       }
     };
   }
@@ -132,13 +138,13 @@ class Person extends Model {
 
 The optional schema against which the model is validated.
 
-Must follow [JSON Schema](http://json-schema.org) specification. If null no validation is done.
+Must follow [JSON Schema](http://json-schema.org) specification. If unset, no validation is done.
 
 ##### Read more
 
-* [$validate](/api/model/instance-methods.html#validate)
-* [jsonAttributes](/api/model/static-properties.html#static-jsonattributes)
-* [custom validation recipe](/recipes/custom-validation.html)
+- [\$validate](/api/model/instance-methods.html#validate)
+- [jsonAttributes](/api/model/static-properties.html#static-jsonattributes)
+- [custom validation recipe](/recipes/custom-validation.html)
 
 ##### Examples
 
@@ -150,11 +156,11 @@ class Person extends Model {
       required: ['firstName', 'lastName'],
 
       properties: {
-        id: {type: 'integer'},
-        parentId: {type: ['integer', 'null']},
-        firstName: {type: 'string', minLength: 1, maxLength: 255},
-        lastName: {type: 'string', minLength: 1, maxLength: 255},
-        age: {type: 'number'},
+        id: { type: 'integer' },
+        parentId: { type: ['integer', 'null'] },
+        firstName: { type: 'string', minLength: 1, maxLength: 255 },
+        lastName: { type: 'string', minLength: 1, maxLength: 255 },
+        age: { type: 'number' },
 
         // Properties defined as objects or arrays are
         // automatically converted to JSON strings when
@@ -165,9 +171,9 @@ class Person extends Model {
         address: {
           type: 'object',
           properties: {
-            street: {type: 'string'},
-            city: {type: 'string'},
-            zipCode: {type: 'string'}
+            street: { type: 'string' },
+            city: { type: 'string' },
+            zipCode: { type: 'string' }
           }
         }
       }
@@ -228,19 +234,21 @@ const person = Person.fromJson({
 // aware of use JSON.stringify to serialize objects to JSON.
 const pojo = person.toJSON();
 
-console.log(pojo.fullName) // --> 'Jennifer Aniston'
-console.log(pojo.isFemale) // --> true
+console.log(pojo.fullName); // --> 'Jennifer Aniston'
+console.log(pojo.isFemale); // --> true
 ```
 
 You can also pass options to [toJSON](/api/model/instance-methods.html#tojson) to only serialize a subset of virtual attributes. In fact, when the `virtuals` option is used, the attributes don't even need to be listed in `virtualAttributes`.
 
 ```js
-const pojo = person.toJSON({ virtuals: ['fullName'] })
+const pojo = person.toJSON({ virtuals: ['fullName'] });
 ```
 
 ## `static` modifiers
 
-Reusable query building functions that can be used in any [eager query](/api/query-builder/eager-methods.html#eager), using [modify](/api/query-builder/other-methods.html#modify) method and in many other places.
+Reusable query building functions that can be used in any query using [modify](/api/query-builder/other-methods.html#modify) method and in many other places.
+
+Also see the [modifier recipe](/recipes/modifiers.html) for more info and examples.
 
 ```js
 class Movie extends Model {
@@ -251,7 +259,7 @@ class Movie extends Model {
       },
 
       orderByName(builder) {
-        builder.orderBy('name')
+        builder.orderBy('name');
       }
     };
   }
@@ -268,25 +276,30 @@ class Animal extends Model {
 }
 ```
 
-Modifiers can be used in any eager query:
+Modifiers can be used for relations in a `withGraphFetched` or `withGraphJoined` query.
 
 ```js
-Person
-  .query()
-  .eager('[movies(goodMovies, orderByName).actors, pets(dogs)]')
+Person.query().withGraphFetched(
+  '[movies(goodMovies, orderByName).actors, pets(dogs)]'
+);
 ```
 
-Modifiers can also be used through [modifyEager](/api/query-builder/other-methods.html#modifyeager):
+Modifiers can also be used through [modifyGraph](/api/query-builder/other-methods.html#modifygraph):
 
 ```js
-Person
-  .query()
-  .eager('[movies.actors, pets]')
-  .modifyEager('movies', ['goodMovies', 'orderByName'])
-  .modifyEager('pets', 'dogs')
+Person.query()
+  .withGraphFetched('[movies.actors, pets]')
+  .modifyGraph('movies', ['goodMovies', 'orderByName'])
+  .modifyGraph('pets', 'dogs');
 ```
 
 ## `static` namedFilters
+
+::: warning
+Deprecated! Will be removed in version 3.0. Use [modifiers](/api/model/static-properties.html#static-modifiers) instead.
+
+[v1 documentation](https://github.com/Vincit/objection.js/blob/v1/doc/api/model/static-properties.md#static-namedfilters)
+:::
 
 An alias for [modifiers](/api/model/static-properties.html#static-modifiers)
 
@@ -404,8 +417,8 @@ The mappers to use to convert column names to property names in code.
 
 Further reading:
 
- * [snakeCaseMappers](/api/objection/#snakecasemappers)
- * [snake_case to camelCase conversion recipe](/recipes/snake-case-to-camel-case-conversion.html)
+- [snakeCaseMappers](/api/objection/#snakecasemappers)
+- [snake_case to camelCase conversion recipe](/recipes/snake-case-to-camel-case-conversion.html)
 
 ##### Examples
 
@@ -439,6 +452,12 @@ class Person extends Model {
 
 ## `static` relatedFindQueryMutates
 
+::: warning
+Deprecated! Will be removed in version 3.0.
+
+[v1 documentation](https://github.com/Vincit/objection.js/blob/v1/doc/api/model/static-properties.md#static-relatedfindquerymutates)
+:::
+
 ```js
 class Person extends Model {
   static get relatedFindQueryMutates() {
@@ -447,9 +466,15 @@ class Person extends Model {
 }
 ```
 
-If this config is set to false, calling `foo.$relatedQuery('bar')` doesn't assign the fetched related models to `foo.bar`. The default is true.
+If this config is set to false, calling `foo.$relatedQuery('bar')` doesn't assign the fetched related models to `foo.bar`. The default is false.
 
 ## `static` relatedInsertQueryMutates
+
+::: warning
+Deprecated! Will be removed in version 3.0.
+
+[v1 documentation](https://github.com/Vincit/objection.js/blob/v1/doc/api/model/static-properties.md#static-relatedinsertquerymutates)
+:::
 
 ```js
 class Person extends Model {
@@ -459,7 +484,7 @@ class Person extends Model {
 }
 ```
 
-If this config is set to false, calling `foo.$relatedQuery('bar').insert(obj)` doesn't append the inserted related model to `foo.bar`. The default is true.
+If this config is set to false, calling `foo.$relatedQuery('bar').insert(obj)` doesn't append the inserted related model to `foo.bar`. The default is false.
 
 ## `static` uidProp
 
@@ -470,7 +495,6 @@ class Person extends Model {
   }
 }
 ```
-
 
 Name of the property used to store a temporary non-db identifier for the model.
 
@@ -510,7 +534,6 @@ NOTE: You cannot use any of the model's properties as `dbRefProp`. For example i
 
 Defaults to '#dbRef'.
 
-
 ## `static` propRefRegex
 
 ```js
@@ -541,37 +564,39 @@ Defaults to false.
 
 ## `static` defaultEagerAlgorithm
 
-```js
-class Person extends Model {
-  static get defaultEagerAlgorithm() {
-    return Model.WhereInEagerAlgorithm;
-  }
-}
-```
+::: warning
+Deprecated! Will be removed in version 3.0. Use [withGraphFetched](/api/query-builder/eager-methods.html#withgraphfetched) or [withGraphJoined](/api/query-builder/eager-methods.html#withgraphjoined) explicitly.
 
-Sets the default eager loading algorithm for this model. Must be either
-`Model.WhereInEagerAlgorithm` or `Model.JoinEagerAlgorithm`.
-
-Defaults to `Model.WhereInEagerAlgorithm`.
+[v1 documentation](https://github.com/Vincit/objection.js/blob/v1/doc/api/model/static-properties.md#static-defaulteageralgorithm)
+:::
 
 ## `static` defaultEagerOptions
 
+::: warning
+Deprecated! Will be removed in version 3.0. Use `defaultGraphOptions` instead.
+
+[v1 documentation](https://github.com/Vincit/objection.js/blob/v1/doc/api/model/static-properties.md#static-defaulteageroptions)
+:::
+
+## `static` defaultGraphOptions
+
 ```js
 class Person extends Model {
-  static get defaultEagerOptions() {
+  static get defaultGraphOptions() {
     return {
       minimize: true,
       separator: '->',
-      aliases: {}
+      aliases: {},
+      maxBatchSize: 10000
     };
   }
 }
 ```
 
-Sets the default options for eager loading algorithm. See the possible
-fields [here](/api/types/#type-eageroptions).
+Sets the default options for [withGraphFetched](/api/query-builder/eager-methods.html#withgraphfetched) and [withGraphJoined](/api/query-builder/eager-methods.html#withgraphjoined). See the possible
+fields [here](/api/types/#type-graphoptions).
 
-Defaults to `{minimize: false, separator: ':', aliases: {}}`.
+Defaults to `{ minimize: false, separator: ':', aliases: {}, maxBatchSize: 10000 }`.
 
 ## `static` useLimitInFirst
 
@@ -597,7 +622,7 @@ class Person extends Model {
 
 [QueryBuilder](/api/query-builder/) subclass to use for all queries created for this model.
 
-This constructor is used whenever a query builder is created using [query](/api/model/static-methods.html#static-query), [$query](/api/model/instance-methods.html#query), [$relatedQuery](/api/model/instance-methods.html#relatedquery) or any other method that creates a query. You can override this to use your own [QueryBuilder](/api/query-builder/) subclass.
+This constructor is used whenever a query builder is created using [query](/api/model/static-methods.html#static-query), [\$query](/api/model/instance-methods.html#query), [\$relatedQuery](/api/model/instance-methods.html#relatedquery) or any other method that creates a query. You can override this to use your own [QueryBuilder](/api/query-builder/) subclass.
 
 [Usage example](/recipes/custom-query-builder.html).
 

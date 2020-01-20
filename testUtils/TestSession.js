@@ -192,7 +192,7 @@ class TestSession {
       ['$afterDelete', 1],
       ['$beforeUpdate', 1, (self, args) => (self.$beforeUpdateOptions = _.cloneDeep(args[0]))],
       ['$afterUpdate', 1, (self, args) => (self.$afterUpdateOptions = _.cloneDeep(args[0]))],
-      ['$afterGet', 1]
+      ['$afterFind', 1]
     ].forEach(hook => {
       Model1.prototype[hook[0]] = createHook(hook[0], hook[1], hook[2]);
       Model2.prototype[hook[0]] = createHook(hook[0], hook[1], hook[2]);

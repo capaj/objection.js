@@ -1,5 +1,5 @@
 const { Model, transaction } = require('../../../');
-const expect = require('expect.js');
+const { expect } = require('chai');
 
 module.exports = session => {
   describe('UpsertGraph deletes rows for relation which is not mentioned in graph #1455', () => {
@@ -131,14 +131,19 @@ module.exports = session => {
         .then(() => {
           return Role.query()
             .first()
-            .eager('sets(orderById).setAttributes(orderById)', {
+            .withGraphFetched('sets(orderById).setAttributes(orderByName)')
+            .modifiers({
               orderById(query) {
                 query.orderBy('id');
+              },
+
+              orderByName(query) {
+                query.orderBy('name');
               }
             });
         })
         .then(setsAfterUpsertGraph => {
-          expect(setsAfterUpsertGraph).to.eql({
+          expect(setsAfterUpsertGraph).to.containSubset({
             id: 1,
             name: 'First Role',
             sets: [
@@ -148,8 +153,8 @@ module.exports = session => {
                 roleId: 1,
 
                 setAttributes: [
-                  { id: 1, name: 'First SetAttribute', setId: 1 },
-                  { id: 2, name: 'Second SetAttribute', setId: 1 }
+                  { name: 'First SetAttribute', setId: 1 },
+                  { name: 'Second SetAttribute', setId: 1 }
                 ]
               },
               {
@@ -158,8 +163,8 @@ module.exports = session => {
                 roleId: 1,
 
                 setAttributes: [
-                  { id: 3, name: 'First SetAttribute', setId: 2 },
-                  { id: 4, name: 'Second SetAttribute', setId: 2 }
+                  { name: 'First SetAttribute', setId: 2 },
+                  { name: 'Second SetAttribute', setId: 2 }
                 ]
               }
             ]
